@@ -34,7 +34,7 @@
     "validate:build": "node scripts/validate-build.js",
     "validate:package": "node scripts/validate-package.js",
     "status": "node scripts/production-summary.js",
-    "prepublishOnly": "npm run validate:all",
+    "prepublishOnly": "node scripts/final-validation.js",
     "start": "node examples/basic-api/server.js"
   },
   "keywords": [
