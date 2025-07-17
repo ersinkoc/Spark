@@ -1,0 +1,88 @@
+{
+  "name": "@oxog/spark",
+  "version": "1.1.0",
+  "description": "Ultra-fast, zero-dependency Node.js web framework with security hardening, memory leak protection, and enhanced error handling",
+  "main": "src/index.js",
+  "types": "types/index.d.ts",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "scripts": {
+    "test": "node tests/run-all-tests.js",
+    "test:integration": "node test-integration.js",
+    "test:unit": "node tests/unit/run.js",
+    "test:performance": "node tests/performance/run.js",
+    "test:security": "node tests/security/run.js",
+    "test:coverage": "node scripts/test-coverage.js",
+    "build": "node scripts/build.js",
+    "build:minify": "node scripts/minify.js",
+    "benchmark": "node benchmarks/run.js",
+    "benchmark:express": "node benchmarks/vs-express.js",
+    "benchmark:fastify": "node benchmarks/vs-fastify.js",
+    "benchmark:koa": "node benchmarks/vs-koa.js",
+    "dev": "node examples/basic-api/server.js",
+    "lint": "node scripts/lint.js",
+    "format:check": "node scripts/format-check.js",
+    "docs": "node scripts/generate-docs.js",
+    "docs:validate": "node scripts/validate-docs.js",
+    "docs:build": "node scripts/build-docs.js",
+    "examples:test": "node scripts/test-examples.js",
+    "validate:all": "node validation/run-all-validations.js",
+    "validate:core": "node validation/core-functionality.js",
+    "validate:features": "node validation/features/checklist.js",
+    "validate:build": "node scripts/validate-build.js",
+    "validate:package": "node scripts/validate-package.js",
+    "status": "node scripts/production-summary.js",
+    "prepublishOnly": "npm run validate:all",
+    "start": "node examples/basic-api/server.js"
+  },
+  "keywords": [
+    "spark",
+    "api",
+    "framework",
+    "rest",
+    "http",
+    "server",
+    "web",
+    "app",
+    "middleware",
+    "router",
+    "zero-dependency",
+    "fast",
+    "secure",
+    "lightweight",
+    "performance",
+    "typescript",
+    "security",
+    "memory-safe",
+    "error-handling",
+    "redos-protection",
+    "path-traversal-protection",
+    "header-injection-protection"
+  ],
+  "author": "Ersin Koç",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ersinkoc/spark.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ersinkoc/spark/issues"
+  },
+  "homepage": "https://github.com/ersinkoc/spark#readme",
+  "files": [
+    "src/",
+    "types/",
+    "dist/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": {
+      "import": "./src/index.js",
+      "require": "./src/index.js"
+    },
+    "./package.json": "./package.json"
+  }
+}

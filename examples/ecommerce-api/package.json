@@ -1,0 +1,13 @@
+{
+  "name": "spark-ecommerce-api-example",
+  "version": "1.0.0",
+  "private": true,
+  "description": "E-commerce API example for @oxog/spark",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@oxog/spark": "file:../.."
+  }
+}

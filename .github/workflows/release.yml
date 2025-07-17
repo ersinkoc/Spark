@@ -1,0 +1,173 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  validate-and-release:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [14.x, 16.x, 18.x, 20.x]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+          registry-url: 'https://registry.npmjs.org'
+      
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+      
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      
+      - name: Run linting
+        run: npm run lint
+      
+      - name: Run tests
+        run: |
+          npm test
+          npm run test:unit
+          npm run test:integration
+          npm run test:security
+      
+      - name: Check code coverage
+        run: npm run test:coverage
+      
+      - name: Run benchmarks
+        run: npm run benchmark
+      
+      - name: Build project
+        run: npm run build
+      
+      - name: Validate package
+        run: |
+          npm run validate:build
+          npm run validate:package
+      
+      - name: Test examples
+        run: npm run examples:test
+      
+      - name: Run full validation
+        if: matrix.node-version == '18.x'
+        run: npm run validate:all
+      
+      - name: Create tarball
+        if: matrix.node-version == '18.x'
+        run: npm pack
+      
+      - name: Upload artifacts
+        if: matrix.node-version == '18.x'
+        uses: actions/upload-artifact@v3
+        with:
+          name: package
+          path: '*.tgz'
+  
+  publish:
+    needs: validate-and-release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18.x'
+          registry-url: 'https://registry.npmjs.org'
+      
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      
+      - name: Build project
+        run: npm run build
+      
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body: |
+            ## @oxog/spark ${{ github.ref }}
+            
+            ### What's New
+            See [CHANGELOG.md](https://github.com/ersinkoc/spark/blob/main/CHANGELOG.md) for details.
+            
+            ### Installation
+            ```bash
+            npm install @oxog/spark
+            ```
+            
+            ### Quick Start
+            ```javascript
+            const { Spark } = require('@oxog/spark');
+            const app = new Spark();
+            
+            app.use((ctx) => {
+              ctx.body = 'Hello World!';
+            });
+            
+            app.listen(3000);
+            ```
+          draft: false
+          prerelease: false
+      
+      - name: Update documentation site
+        run: |
+          npm run docs:build
+          # Deploy docs to GitHub Pages or other hosting
+      
+      - name: Notify Discord/Slack
+        if: success()
+        run: |
+          echo "Release ${{ github.ref }} published successfully!"
+          # Add webhook notification here
+      
+      - name: Create npm badge
+        run: |
+          echo "[![npm version](https://badge.fury.io/js/@oxog%2Fspark.svg)](https://www.npmjs.com/package/@oxog/spark)"
+          echo "[![Downloads](https://img.shields.io/npm/dm/@oxog/spark.svg)](https://www.npmjs.com/package/@oxog/spark)"
+
+  post-release-monitoring:
+    needs: publish
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Monitor npm downloads
+        run: |
+          echo "Monitoring npm downloads for @oxog/spark"
+          # Add monitoring script
+      
+      - name: Check for issues
+        run: |
+          echo "Checking GitHub issues for new reports"
+          # Add issue monitoring
+      
+      - name: Security scan
+        run: |
+          echo "Running post-release security scan"
+          # Add security scanning

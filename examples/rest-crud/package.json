@@ -1,0 +1,13 @@
+{
+  "name": "spark-rest-crud-example",
+  "version": "1.0.0",
+  "private": true,
+  "description": "REST CRUD API example for @oxog/spark",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@oxog/spark": "file:../.."
+  }
+}

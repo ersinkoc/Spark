@@ -1,0 +1,71 @@
+# Source files
+src/
+
+# Development files
+.git/
+.github/
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Test files
+tests/
+test/
+test-*.js
+*.test.js
+*.spec.js
+coverage/
+.nyc_output/
+
+# Development dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+
+# Build and dev files
+scripts/
+benchmarks/
+examples/
+docs/
+validation/
+monitor/
+
+# Config files
+.eslintrc*
+.gitignore
+.editorconfig
+tsconfig.json
+.npmignore
+renovate.json
+
+# Documentation (except essential)
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+SECURITY.md
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+*.tmp
+uploads/
+
+# CI/CD
+.travis.yml
+.gitlab-ci.yml
+appveyor.yml
+.circleci/
+
+# Other
+*.log
+.env
+.env.*
+CLAUDE.md
+claude_config.json
+
+# Minified files (if we want to exclude them)
+*.min.js

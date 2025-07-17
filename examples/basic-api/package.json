@@ -1,0 +1,13 @@
+{
+  "name": "spark-basic-api-example",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Basic API example for @oxog/spark",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@oxog/spark": "file:../.."
+  }
+}
