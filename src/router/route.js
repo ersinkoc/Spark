@@ -5,38 +5,47 @@ class Route {
     this.methods = {};
   }
 
-  get(handler) {
-    return this.add('GET', handler);
+  get(...handlers) {
+    handlers.forEach(handler => this.add('GET', handler));
+    return this;
   }
 
-  post(handler) {
-    return this.add('POST', handler);
+  post(...handlers) {
+    handlers.forEach(handler => this.add('POST', handler));
+    return this;
   }
 
-  put(handler) {
-    return this.add('PUT', handler);
+  put(...handlers) {
+    handlers.forEach(handler => this.add('PUT', handler));
+    return this;
   }
 
-  delete(handler) {
-    return this.add('DELETE', handler);
+  delete(...handlers) {
+    handlers.forEach(handler => this.add('DELETE', handler));
+    return this;
   }
 
-  patch(handler) {
-    return this.add('PATCH', handler);
+  patch(...handlers) {
+    handlers.forEach(handler => this.add('PATCH', handler));
+    return this;
   }
 
-  head(handler) {
-    return this.add('HEAD', handler);
+  head(...handlers) {
+    handlers.forEach(handler => this.add('HEAD', handler));
+    return this;
   }
 
-  options(handler) {
-    return this.add('OPTIONS', handler);
+  options(...handlers) {
+    handlers.forEach(handler => this.add('OPTIONS', handler));
+    return this;
   }
 
-  all(handler) {
+  all(...handlers) {
     const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
-    methods.forEach(method => {
-      this.add(method, handler);
+    handlers.forEach(handler => {
+      methods.forEach(method => {
+        this.add(method, handler);
+      });
     });
     return this;
   }
@@ -99,7 +108,7 @@ class Route {
           await result;
         }
       } catch (err) {
-        next(err);
+        return next(err);
       }
     };
 

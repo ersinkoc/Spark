@@ -268,6 +268,17 @@ app.get('/', (ctx) => {
   `);
 });
 
+// Health check endpoint
+app.get('/health', async (ctx) => {
+  ctx.json({
+    status: 'ok',
+    service: 'file-upload',
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    timestamp: new Date().toISOString()
+  });
+});
+
 function getContentType(ext) {
   const types = {
     '.jpg': 'image/jpeg',
@@ -283,11 +294,12 @@ function getContentType(ext) {
 }
 
 if (require.main === module) {
-  const port = process.env.PORT || 3000;
+  const port = process.env.PORT || 0; // Use dynamic port by default
   app.listen(port, () => {
-    console.log(`🚀 File Upload Server running on http://localhost:${port}`);
-    console.log(`📁 Upload files at: http://localhost:${port}`);
-    console.log(`📋 List files: http://localhost:${port}/files`);
+    const actualPort = app.server?.address()?.port || port;
+    console.log(`🚀 File Upload Server running on http://localhost:${actualPort}`);
+    console.log(`📁 Upload files at: http://localhost:${actualPort}`);
+    console.log(`📋 List files: http://localhost:${actualPort}/files`);
   });
 }
 

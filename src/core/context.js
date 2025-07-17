@@ -633,11 +633,13 @@ class Context {
     const existingCookies = this.responseHeaders['set-cookie'] || [];
     if (Array.isArray(existingCookies)) {
       existingCookies.push(cookieString);
-    } else {
+      this.responseHeaders['set-cookie'] = existingCookies;
+    } else if (existingCookies) {
       this.responseHeaders['set-cookie'] = [existingCookies, cookieString];
+    } else {
+      this.responseHeaders['set-cookie'] = [cookieString];
     }
-
-    this.set('Set-Cookie', this.responseHeaders['set-cookie']);
+    
     return this;
   }
 

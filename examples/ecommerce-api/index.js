@@ -24,6 +24,8 @@ app.use(require('../../src/middleware/body-parser')());
 app.use(require('../../src/middleware/compression')());
 app.use(require('../../src/middleware/session')({
   secret: process.env.SESSION_SECRET || 'ecommerce-secret-key',
+  saveUninitialized: true,
+  resave: false,
   cookie: {
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     httpOnly: true,
@@ -417,6 +419,23 @@ api.get('/admin/stats', requireAdmin, async (ctx) => {
   ctx.json({ stats });
 });
 
+// Root route
+app.get('/', async (ctx) => {
+  ctx.json({
+    message: 'E-commerce API - Complete e-commerce solution with authentication, products, cart, and orders',
+    name: 'E-commerce API',
+    version: '1.0.0',
+    description: 'Complete e-commerce API with authentication, products, cart, and orders',
+    endpoints: {
+      auth: '/api/auth/*',
+      products: '/api/products',
+      cart: '/api/cart',
+      orders: '/api/orders',
+      admin: '/api/admin/*'
+    }
+  });
+});
+
 // Mount API routes
 app.use('/api', api.routes());
 
@@ -581,8 +600,8 @@ function initializeSampleData() {
 }
 
 // Start server
-const port = process.env.PORT || app.options.port || 3000;
-app.listen(port).then(() => {
+const port = process.env.PORT || 0; // Use dynamic port by default
+app.listen(port, () => {
   const actualPort = app.server?.address()?.port || port;
   console.log(`🛍️  E-commerce API running on port ${actualPort}`);
   console.log(`📧 Admin login: admin@example.com / admin123`);

@@ -66,7 +66,7 @@ declare module '@oxog/spark' {
     html(data: string): Context;
     send(data: any): Context;
     end(data?: any): Context;
-    cookie(name: string, value: string, options?: CookieOptions): Context;
+    setCookie(name: string, value: string, options?: CookieOptions): Context;
     clearCookie(name: string, options?: CookieOptions): Context;
   }
 
@@ -163,19 +163,30 @@ declare module '@oxog/spark' {
 
   export interface RateLimitOptions {
     max?: number;
-    window?: number;
+    windowMs?: number;
     message?: string;
     keyGenerator?: (ctx: Context) => string;
     skip?: (ctx: Context) => boolean;
+    standardHeaders?: boolean;
+    legacyHeaders?: boolean;
   }
 
   export interface SessionOptions {
     key?: string;
     secret: string;
-    maxAge?: number;
-    httpOnly?: boolean;
-    secure?: boolean;
-    sameSite?: 'strict' | 'lax' | 'none';
+    store?: any;
+    cookie?: {
+      maxAge?: number;
+      httpOnly?: boolean;
+      secure?: boolean;
+      sameSite?: 'strict' | 'lax' | 'none';
+      path?: string;
+      domain?: string;
+    };
+    genid?: () => string;
+    rolling?: boolean;
+    resave?: boolean;
+    saveUninitialized?: boolean;
   }
 
   export interface StaticOptions {
@@ -206,13 +217,14 @@ declare module '@oxog/spark' {
   export function cors(options?: CorsOptions): Middleware;
   export function compression(options?: CompressionOptions): Middleware;
   export function rateLimit(options?: RateLimitOptions): Middleware;
-  export function session(options?: SessionOptions): Middleware;
+  export function session(options: SessionOptions): Middleware;
   export function security(options?: any): Middleware;
   export function healthCheck(options?: any): Middleware;
   export function metrics(options?: any): Middleware;
   export function logger(options?: any): Middleware;
 
-  // Alias for backward compatibility
+  // Main exports
+  export const Application: typeof Spark;
   export const App: typeof Spark;
 
   // Error handling utilities
@@ -254,5 +266,26 @@ declare module '@oxog/spark' {
     ContextPool: any;
     RegexValidator: any;
     SafeRegexCache: any;
+  };
+
+  // Default export for ES6 compatibility
+  export default {
+    Spark,
+    App,
+    Application,
+    Router,
+    Context,
+    middleware,
+    bodyParser,
+    cors,
+    compression,
+    rateLimit,
+    session,
+    security,
+    healthCheck,
+    metrics,
+    logger,
+    errorHandling,
+    utils
   };
 }

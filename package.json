@@ -26,6 +26,7 @@
     "docs": "node scripts/generate-docs.js",
     "docs:validate": "node scripts/validate-docs.js",
     "docs:build": "node scripts/build-docs.js",
+    "docs:test": "node tests/docs-examples/run-all-tests.js",
     "examples:test": "node scripts/test-examples.js",
     "validate:all": "node validation/run-all-validations.js",
     "validate:core": "node validation/core-functionality.js",

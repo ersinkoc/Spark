@@ -109,12 +109,36 @@ function session(options = {}) {
       secret: opts.secret,
       rolling: opts.rolling,
       resave: opts.resave,
-      saveUninitialized: opts.saveUninitialized
+      saveUninitialized: opts.saveUninitialized,
+      ctx: ctx
     });
 
-    await next();
+    // Store original response methods
+    const originalSend = ctx.send;
+    const originalJson = ctx.json;
+    
+    // Track if session needs to be saved
+    ctx._sessionSaveNeeded = false;
+    ctx._sessionSaved = false;
+    
+    // Override send methods to save session before response
+    ctx.send = function(data) {
+      if (!ctx.responded && !ctx._sessionSaved) {
+        saveSessionSync(ctx, opts);
+        ctx._sessionSaved = true;
+      }
+      return originalSend.call(ctx, data);
+    };
 
-    await saveSession(ctx, opts);
+    ctx.json = function(data) {
+      if (!ctx.responded && !ctx._sessionSaved) {
+        saveSessionSync(ctx, opts);
+        ctx._sessionSaved = true;
+      }
+      return originalJson.call(ctx, data);
+    };
+
+    await next();
   };
 }
 
@@ -141,6 +165,20 @@ function createSessionProxy(session, options) {
       
       target[property] = value;
       options.modified = true;
+      
+      // Auto-save session when modified
+      if (options.ctx && !options.ctx.responded) {
+        const sessionData = {};
+        for (const key in session) {
+          if (session.hasOwnProperty(key)) {
+            sessionData[key] = session[key];
+          }
+        }
+        options.store.set(options.sessionId, sessionData, options.cookie.maxAge);
+        const signedId = signCookie(options.sessionId, options.secret);
+        options.ctx.setCookie(options.key, signedId, options.cookie);
+      }
+      
       return true;
     },
     
@@ -223,6 +261,10 @@ async function saveSession(ctx, opts) {
     return;
   }
 
+  if (ctx.responded) {
+    return;
+  }
+
   if (session.destroyed) {
     ctx.clearCookie(opts.key);
     return;
@@ -246,6 +288,47 @@ async function saveSession(ctx, opts) {
     ctx.setCookie(opts.key, signedId, opts.cookie);
   } else if (opts.rolling) {
     await opts.store.touch(session.id, session, opts.cookie.maxAge);
+    
+    const signedId = signCookie(session.id, opts.secret);
+    ctx.setCookie(opts.key, signedId, opts.cookie);
+  }
+}
+
+function saveSessionSync(ctx, opts) {
+  const session = ctx.session;
+  
+  if (!session) {
+    return;
+  }
+
+  if (ctx.responded) {
+    return;
+  }
+
+  if (session.destroyed) {
+    ctx.clearCookie(opts.key);
+    return;
+  }
+
+  const shouldSave = session.modified || 
+                     (opts.resave && !session.isNew) ||
+                     (opts.saveUninitialized && session.isNew);
+
+  if (shouldSave) {
+    const sessionData = {};
+    for (const key in session) {
+      if (session.hasOwnProperty(key)) {
+        sessionData[key] = session[key];
+      }
+    }
+    
+    // Save session asynchronously but don't wait
+    opts.store.set(session.id, sessionData, opts.cookie.maxAge);
+    
+    const signedId = signCookie(session.id, opts.secret);
+    ctx.setCookie(opts.key, signedId, opts.cookie);
+  } else if (opts.rolling) {
+    opts.store.touch(session.id, session, opts.cookie.maxAge);
     
     const signedId = signCookie(session.id, opts.secret);
     ctx.setCookie(opts.key, signedId, opts.cookie);

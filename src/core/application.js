@@ -300,11 +300,26 @@ class Application extends EventEmitter {
         this.cleanupHandlers.push(pathOrMiddleware.cleanup);
       }
     } else if (typeof middleware === 'function') {
-      const wrappedMiddleware = (ctx, next) => {
+      const wrappedMiddleware = async (ctx, next) => {
         if (ctx.path.startsWith(pathOrMiddleware)) {
-          return middleware(ctx, next);
+          // Store the original path and prefix
+          const originalPath = ctx.path;
+          const strippedPath = ctx.path.slice(pathOrMiddleware.length) || '/';
+          
+          // Set the path for the middleware
+          ctx.path = strippedPath;
+          ctx.mountpath = pathOrMiddleware;
+          
+          try {
+            await middleware(ctx, next);
+          } finally {
+            // Restore the original state
+            ctx.path = originalPath;
+            delete ctx.mountpath;
+          }
+        } else {
+          await next();
         }
-        return next();
       };
       this.middlewares.push(wrappedMiddleware);
       
@@ -700,7 +715,7 @@ class Application extends EventEmitter {
       host = this.options.host;
     }
 
-    port = port || this.options.port;
+    port = port !== undefined ? port : this.options.port;
     host = host || this.options.host;
 
     if (this.options.cluster && cluster.isMaster) {

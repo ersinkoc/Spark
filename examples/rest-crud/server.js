@@ -159,8 +159,10 @@ router.get('/stats', async (ctx) => {
 // Mount router
 console.log('Router routes:', router.routes);
 console.log('Router routes function:', typeof router.routes);
+console.log('Router stack length:', router.stack ? router.stack.length : 'no stack');
 if (typeof router.routes === 'function') {
   app.use('/api/v1', router.routes());
+  console.log('Router mounted on /api/v1');
 } else {
   console.error('Router.routes is not a function!');
   // Try alternative approach
@@ -174,18 +176,25 @@ app.get('/test', (ctx) => {
 
 // Root endpoint
 app.get('/', (ctx) => {
-  ctx.json({
-    message: 'CRUD API Example',
-    version: '1.0.0',
-    endpoints: {
-      'GET /api/v1/users': 'Get all users',
-      'GET /api/v1/users/:id': 'Get user by ID',
-      'POST /api/v1/users': 'Create new user',
-      'PUT /api/v1/users/:id': 'Update user',
-      'DELETE /api/v1/users/:id': 'Delete user',
-      'GET /api/v1/stats': 'Get statistics'
-    }
-  });
+  const content = `
+    <html>
+      <head><title>CRUD API Documentation</title></head>
+      <body>
+        <h1>CRUD API Documentation</h1>
+        <p>Welcome to the CRUD API example</p>
+        <h2>Available Endpoints:</h2>
+        <ul>
+          <li>GET /api/v1/users - Get all users</li>
+          <li>GET /api/v1/users/:id - Get user by ID</li>
+          <li>POST /api/v1/users - Create new user</li>
+          <li>PUT /api/v1/users/:id - Update user</li>
+          <li>DELETE /api/v1/users/:id - Delete user</li>
+          <li>GET /api/v1/stats - Get statistics</li>
+        </ul>
+      </body>
+    </html>
+  `;
+  ctx.html(content);
 });
 
 // Error handling
@@ -202,7 +211,7 @@ app.use(async (ctx, next) => {
 });
 
 if (require.main === module) {
-  const port = process.env.PORT || 3000;
+  const port = process.env.PORT || 0; // Use dynamic port by default
   app.listen(port, () => {
     const actualPort = app.server?.address()?.port || port;
     console.log(`🚀 CRUD API Server running on http://localhost:${actualPort}`);

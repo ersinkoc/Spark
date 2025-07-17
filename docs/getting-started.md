@@ -1,16 +1,18 @@
-# Getting Started with @oxog/spark
+# Getting Started with Spark
 
-Welcome to @oxog/spark, a zero-dependency, ultra-fast Node.js API framework built for performance and security.
+This guide will help you get started with Spark, a fast and lightweight Node.js web framework.
 
 ## Installation
+
+Install Spark using npm:
 
 ```bash
 npm install @oxog/spark
 ```
 
-## Quick Start
+## Your First Spark Application
 
-### Basic Server
+Create a new file called `app.js`:
 
 ```javascript
 const { Spark } = require('@oxog/spark');
@@ -18,99 +20,60 @@ const { Spark } = require('@oxog/spark');
 const app = new Spark();
 
 app.get('/', (ctx) => {
-  ctx.json({ message: 'Hello World!' });
+  ctx.json({ message: 'Hello, Spark!' });
 });
 
 app.listen(3000, () => {
-  console.log('Server running on port 3000');
+  console.log('Server running on http://localhost:3000');
 });
 ```
 
-### With Middleware
+Run your application:
+
+```bash
+node app.js
+```
+
+Visit `http://localhost:3000` in your browser to see your app in action!
+
+## Basic Routing
+
+Spark supports all standard HTTP methods:
 
 ```javascript
 const { Spark } = require('@oxog/spark');
-
 const app = new Spark();
 
-// Add middleware
-app.use(app.middleware.cors());
-app.use(app.middleware.bodyParser());
-app.use(app.middleware.compression());
-
-app.get('/', (ctx) => {
-  ctx.json({ message: 'Hello World!' });
+// GET route
+app.get('/users', (ctx) => {
+  ctx.json({ users: [] });
 });
 
-app.post('/api/users', (ctx) => {
-  console.log('Received:', ctx.body);
-  ctx.status(201).json({ id: 1, ...ctx.body });
+// POST route
+app.post('/users', (ctx) => {
+  const user = ctx.body;
+  ctx.status(201).json({ user });
+});
+
+// PUT route
+app.put('/users/:id', (ctx) => {
+  const { id } = ctx.params;
+  const user = ctx.body;
+  ctx.json({ id, ...user });
+});
+
+// DELETE route
+app.delete('/users/:id', (ctx) => {
+  const { id } = ctx.params;
+  ctx.status(204).end();
 });
 
 app.listen(3000);
 ```
 
-## Core Concepts
-
-### Context Object
-
-The context object (`ctx`) contains request and response information:
-
-```javascript
-app.get('/info', (ctx) => {
-  console.log('Method:', ctx.method);
-  console.log('Path:', ctx.path);
-  console.log('Query:', ctx.query);
-  console.log('Headers:', ctx.headers);
-  console.log('IP:', ctx.ip());
-  
-  ctx.json({
-    method: ctx.method,
-    path: ctx.path,
-    userAgent: ctx.get('user-agent')
-  });
-});
-```
-
-### Middleware
-
-Middleware functions have access to the context object and a `next` function:
-
-```javascript
-// Custom middleware
-app.use(async (ctx, next) => {
-  console.log(`${ctx.method} ${ctx.path}`);
-  const start = Date.now();
-  
-  await next();
-  
-  const duration = Date.now() - start;
-  console.log(`Request took ${duration}ms`);
-});
-```
-
-### Router
-
-Use the Router class for organizing routes:
-
-```javascript
-const { Spark, Router } = require('@oxog/spark');
-
-const app = new Spark();
-const router = new Router();
-
-router.get('/users', (ctx) => {
-  ctx.json({ users: [] });
-});
-
-router.post('/users', (ctx) => {
-  ctx.status(201).json({ id: 1, ...ctx.body });
-});
-
-app.use('/api', router);
-```
-
 ## Route Parameters
+
+Use route parameters to capture values from the URL:
 
 ```javascript
 app.get('/users/:id', (ctx) => {
@@ -118,201 +81,436 @@ app.get('/users/:id', (ctx) => {
   ctx.json({ userId: id });
 });
 
-app.get('/posts/:postId/comments/:commentId', (ctx) => {
-  const { postId, commentId } = ctx.params;
-  ctx.json({ postId, commentId });
+app.get('/users/:id/posts/:postId', (ctx) => {
+  const { id, postId } = ctx.params;
+  ctx.json({ userId: id, postId });
 });
 ```
 
 ## Query Parameters
 
+Access query parameters through `ctx.query`:
+
 ```javascript
 app.get('/search', (ctx) => {
-  const { q, page = 1, limit = 10 } = ctx.query;
-  ctx.json({ query: q, page, limit });
+  const { q, limit = 10 } = ctx.query;
+  ctx.json({ 
+    query: q, 
+    limit: parseInt(limit),
+    results: [] 
+  });
 });
+
+// GET /search?q=nodejs&limit=5
 ```
 
 ## Request Body
 
-```javascript
-app.use(app.middleware.bodyParser());
+Parse request bodies using the body-parser middleware:
 
-app.post('/api/data', (ctx) => {
-  console.log('JSON body:', ctx.body);
-  ctx.json({ received: ctx.body });
+```javascript
+const { Spark } = require('@oxog/spark');
+const bodyParser = require('@oxog/spark/middleware/body-parser');
+
+const app = new Spark();
+
+app.use(bodyParser());
+
+app.post('/users', (ctx) => {
+  const { name, email } = ctx.body;
+  ctx.status(201).json({ 
+    id: 1, 
+    name, 
+    email 
+  });
+});
+
+app.listen(3000);
+```
+
+## Middleware
+
+Middleware functions execute during the request/response cycle:
+
+### Global Middleware
+
+```javascript
+const { Spark } = require('@oxog/spark');
+const app = new Spark();
+
+// Global middleware
+app.use((ctx, next) => {
+  console.log(`${ctx.method} ${ctx.path}`);
+  return next();
+});
+
+app.get('/', (ctx) => {
+  ctx.json({ message: 'Hello World' });
+});
+
+app.listen(3000);
+```
+
+### Route-Specific Middleware
+
+```javascript
+// Authentication middleware
+function requireAuth(ctx, next) {
+  const token = ctx.get('authorization');
+  if (!token) {
+    return ctx.status(401).json({ error: 'Unauthorized' });
+  }
+  return next();
+}
+
+app.get('/protected', requireAuth, (ctx) => {
+  ctx.json({ message: 'Protected resource' });
 });
 ```
 
-## File Uploads
+### Multiple Middleware
 
 ```javascript
-app.use(app.middleware.bodyParser());
-
-app.post('/upload', (ctx) => {
-  if (ctx.files && ctx.files.file) {
-    const file = ctx.files.file;
-    console.log('File:', file.filename, file.size);
-    ctx.json({ filename: file.filename, size: file.size });
-  } else {
-    ctx.status(400).json({ error: 'No file uploaded' });
+app.get('/admin', 
+  requireAuth,
+  requireAdmin,
+  (ctx) => {
+    ctx.json({ message: 'Admin area' });
   }
+);
+```
+
+## Using Routers
+
+Organize your routes using routers:
+
+```javascript
+const { Spark, Router } = require('@oxog/spark');
+
+const app = new Spark();
+const api = new Router();
+
+// API routes
+api.get('/users', (ctx) => {
+  ctx.json({ users: [] });
 });
+
+api.post('/users', (ctx) => {
+  const user = ctx.body;
+  ctx.status(201).json({ user });
+});
+
+// Mount the router
+app.use('/api/v1', api.routes());
+
+app.listen(3000);
 ```
 
 ## Error Handling
 
+Handle errors gracefully:
+
 ```javascript
+const { Spark } = require('@oxog/spark');
+const app = new Spark();
+
+// Global error handler
 app.use(async (ctx, next) => {
   try {
     await next();
   } catch (error) {
     console.error('Error:', error);
-    ctx.status(500).json({ error: 'Internal Server Error' });
+    ctx.status(error.status || 500);
+    ctx.json({
+      error: {
+        message: error.message,
+        ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
+      }
+    });
   }
 });
+
+app.get('/error', (ctx) => {
+  throw new Error('Something went wrong!');
+});
+
+app.listen(3000);
 ```
 
-## Built-in Middleware
+## Common Middleware
 
 ### CORS
 
+Enable Cross-Origin Resource Sharing:
+
 ```javascript
-app.use(app.middleware.cors({
-  origin: 'https://example.com',
-  methods: ['GET', 'POST'],
+const cors = require('@oxog/spark/middleware/cors');
+
+app.use(cors({
+  origin: 'http://localhost:3001',
   credentials: true
-}));
-```
-
-### Rate Limiting
-
-```javascript
-app.use(app.middleware.rateLimit({
-  max: 100,
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  message: 'Too many requests'
 }));
 ```
 
 ### Compression
 
+Compress responses:
+
 ```javascript
-app.use(app.middleware.compression({
-  threshold: 1024,
-  level: 6
-}));
+const compression = require('@oxog/spark/middleware/compression');
+
+app.use(compression());
 ```
 
 ### Static Files
 
+Serve static files:
+
 ```javascript
-app.use('/static', app.middleware.static('./public'));
+const staticFiles = require('@oxog/spark/middleware/static');
+
+app.use('/public', staticFiles({
+  root: './public'
+}));
 ```
 
-### Security Headers
+### Request Logging
+
+Log requests:
 
 ```javascript
-app.use(app.middleware.security({
-  hsts: { maxAge: 31536000 },
-  contentSecurityPolicy: {
-    'default-src': ["'self'"],
-    'script-src': ["'self'", "'unsafe-inline'"]
+const logger = require('@oxog/spark/middleware/logger');
+
+app.use(logger({
+  format: ':method :url :status :response-time ms'
+}));
+```
+
+### Rate Limiting
+
+Limit request rates:
+
+```javascript
+const rateLimit = require('@oxog/spark/middleware/rate-limit');
+
+app.use(rateLimit({
+  max: 100,
+  windowMs: 60000 // 1 minute
+}));
+```
+
+## Sessions
+
+Use sessions for user authentication:
+
+```javascript
+const session = require('@oxog/spark/middleware/session');
+
+app.use(session({
+  secret: 'your-secret-key',
+  saveUninitialized: true,
+  cookie: {
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production'
   }
 }));
+
+app.post('/login', (ctx) => {
+  const { email, password } = ctx.body;
+  
+  if (authenticate(email, password)) {
+    ctx.session.userId = user.id;
+    ctx.json({ success: true });
+  } else {
+    ctx.status(401).json({ error: 'Invalid credentials' });
+  }
+});
+
+app.get('/profile', (ctx) => {
+  if (!ctx.session.userId) {
+    return ctx.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  const user = getUserById(ctx.session.userId);
+  ctx.json({ user });
+});
 ```
 
-### Sessions
+## Complete Example
+
+Here's a complete example that puts it all together:
 
 ```javascript
-app.use(app.middleware.session({
-  secret: 'your-secret-key',
-  cookie: { maxAge: 24 * 60 * 60 * 1000 } // 24 hours
+const { Spark, Router } = require('@oxog/spark');
+
+// Import middleware
+const bodyParser = require('@oxog/spark/middleware/body-parser');
+const cors = require('@oxog/spark/middleware/cors');
+const logger = require('@oxog/spark/middleware/logger');
+const session = require('@oxog/spark/middleware/session');
+
+const app = new Spark();
+
+// Global middleware
+app.use(logger());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3001',
+  credentials: true
+}));
+app.use(bodyParser());
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  saveUninitialized: true,
+  cookie: {
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production'
+  }
 }));
 
-app.get('/session', (ctx) => {
-  ctx.session.views = (ctx.session.views || 0) + 1;
-  ctx.json({ views: ctx.session.views });
+// In-memory user store (use a database in production)
+const users = [];
+let nextId = 1;
+
+// Authentication middleware
+function requireAuth(ctx, next) {
+  if (!ctx.session.userId) {
+    return ctx.status(401).json({ error: 'Authentication required' });
+  }
+  return next();
+}
+
+// API router
+const api = new Router();
+
+// Auth routes
+api.post('/auth/register', (ctx) => {
+  const { name, email, password } = ctx.body;
+  
+  // Check if user exists
+  const existingUser = users.find(u => u.email === email);
+  if (existingUser) {
+    return ctx.status(409).json({ error: 'User already exists' });
+  }
+  
+  // Create user
+  const user = {
+    id: nextId++,
+    name,
+    email,
+    password // Hash this in production!
+  };
+  users.push(user);
+  
+  // Log in user
+  ctx.session.userId = user.id;
+  
+  ctx.status(201).json({
+    user: { id: user.id, name: user.name, email: user.email }
+  });
+});
+
+api.post('/auth/login', (ctx) => {
+  const { email, password } = ctx.body;
+  
+  const user = users.find(u => u.email === email && u.password === password);
+  if (!user) {
+    return ctx.status(401).json({ error: 'Invalid credentials' });
+  }
+  
+  ctx.session.userId = user.id;
+  ctx.json({
+    user: { id: user.id, name: user.name, email: user.email }
+  });
+});
+
+api.post('/auth/logout', (ctx) => {
+  ctx.session.destroy();
+  ctx.json({ message: 'Logged out successfully' });
+});
+
+// Protected routes
+api.get('/profile', requireAuth, (ctx) => {
+  const user = users.find(u => u.id === ctx.session.userId);
+  ctx.json({
+    user: { id: user.id, name: user.name, email: user.email }
+  });
+});
+
+api.get('/users', requireAuth, (ctx) => {
+  const publicUsers = users.map(u => ({
+    id: u.id,
+    name: u.name,
+    email: u.email
+  }));
+  ctx.json({ users: publicUsers });
+});
+
+// Mount API routes
+app.use('/api', api.routes());
+
+// Health check
+app.get('/health', (ctx) => {
+  ctx.json({ 
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
+// Start server
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`🚀 Server running on port ${port}`);
+  console.log(`📱 Health check: http://localhost:${port}/health`);
 });
 ```
 
-## Response Methods
+## Environment Variables
 
-```javascript
-app.get('/api/examples', (ctx) => {
-  // JSON response
-  ctx.json({ data: 'example' });
-  
-  // Text response
-  ctx.text('Hello World');
-  
-  // HTML response
-  ctx.html('<h1>Hello World</h1>');
-  
-  // Status code
-  ctx.status(201).json({ created: true });
-  
-  // Headers
-  ctx.set('X-Custom-Header', 'value');
-  
-  // Redirect
-  ctx.redirect('/other-page');
-  
-  // Cookies
-  ctx.setCookie('session', 'value', { httpOnly: true });
-});
-```
-
-## Configuration
+Use environment variables for configuration:
 
 ```javascript
 const app = new Spark({
-  port: 3000,
-  cluster: true,
-  compression: true,
+  port: process.env.PORT || 3000,
   security: {
-    cors: { origin: '*' },
-    rateLimit: { max: 1000, window: 60000 }
+    cors: {
+      origin: process.env.CORS_ORIGIN || 'http://localhost:3001'
+    }
   }
 });
+```
+
+Create a `.env` file:
+
+```
+PORT=3000
+CORS_ORIGIN=http://localhost:3001
+SESSION_SECRET=your-super-secret-key
+NODE_ENV=development
 ```
 
 ## Next Steps
 
-- [API Reference](api-reference.md)
-- [Middleware Guide](middleware-guide.md)
-- [Security Best Practices](security-best-practices.md)
-- [Deployment Guide](deployment.md)
+- Read the [API Reference](api-reference.md) for detailed documentation
+- Check out the [Middleware Guide](middleware-guide.md) for advanced middleware usage
+- Learn about [Security Best Practices](security-best-practices.md)
+- See the [Deployment Guide](deployment.md) for production deployment
 
 ## Examples
 
-Check out the [examples](../examples/) directory for complete applications:
+Check out the `examples/` directory for complete working examples:
 
-- [Basic API](../examples/basic-api/)
-- [REST CRUD](../examples/rest-crud/)
-- [File Upload](../examples/file-upload/)
-- [E-commerce API](../examples/ecommerce-api/)
+- `basic-api/` - Simple REST API
+- `ecommerce-api/` - E-commerce API with authentication
+- `file-upload/` - File upload handling
+- `rest-crud/` - Complete CRUD operations
 
-## Performance
+## Getting Help
 
-@oxog/spark is designed for performance:
+- Read the documentation in the `docs/` folder
+- Check the [GitHub Issues](https://github.com/oxog/spark/issues) for known problems
+- Open a new issue if you find a bug or have a feature request
 
-- **32,000+ requests/second** (basic JSON response)
-- **<0.5ms overhead** per request
-- **Zero dependencies** - only Node.js built-ins
-- **Memory efficient** - minimal memory footprint
-- **Cluster support** - automatic scaling across CPU cores
-
-## TypeScript Support
-
-Full TypeScript definitions are included:
-
-```typescript
-import { Spark, Context } from '@oxog/spark';
-
-const app = new Spark();
-
-app.get('/', (ctx: Context) => {
-  ctx.json({ message: 'Hello TypeScript!' });
-});
-```
+Welcome to Spark! 🎉

@@ -1,910 +1,581 @@
 # API Reference
 
-This document provides a comprehensive reference for the Spark Framework.
+Complete reference documentation for the Spark framework.
 
 ## Table of Contents
 
-- [Core](#core)
-  - [Application](#application)
-  - [Context](#context)
-  - [Middleware](#middleware)
-  - [Request](#request)
-  - [Response](#response)
-- [Middleware](#middleware)
-  - [Body-parser](#body-parser)
-  - [Cache](#cache)
-  - [Compression](#compression)
-  - [Cors](#cors)
-  - [Health](#health)
-  - [Index](#index)
-  - [Logger](#logger)
-  - [Metrics](#metrics)
-  - [Rate-limit](#rate-limit)
-  - [Security](#security)
-  - [Session](#session)
-  - [Static](#static)
+- [Application](#application)
 - [Router](#router)
-  - [Layer](#layer)
-  - [Route](#route)
-  - [Router](#router)
-- [Utilities](#utilities)
-  - [Async-handler](#async-handler)
-  - [Cache](#cache)
-  - [Context-pool](#context-pool)
-  - [Error-types](#error-types)
-  - [Http](#http)
-  - [Regex-validator](#regex-validator)
+- [Context](#context)
+- [Middleware](#middleware)
+- [Built-in Middleware](#built-in-middleware)
+- [Error Handling](#error-handling)
 
----
+## Application
 
-## Core
+The main Spark application class.
 
-### Application
+### Constructor
 
-**File:** `src\core\application.js`
+```javascript
+const app = new Spark(options);
+```
 
-**Exports:**
+#### Options
 
-- `Application` (default)
+- `port` (number) - Default port for the server (default: 3000)
+- `security` (object) - Security configuration
+  - `cors` (object) - CORS configuration
+  - `csrf` (boolean) - Enable CSRF protection
+  - `rateLimit` (object) - Rate limiting configuration
 
-**Functions:**
+### Methods
 
-#### `shutdownHandler`
+#### `use(middleware)`
 
-Description pending...
+Add middleware to the application.
 
-#### `wrappedMiddleware`
+```javascript
+app.use((ctx, next) => {
+  console.log(`${ctx.method} ${ctx.path}`);
+  return next();
+});
+```
 
-Description pending...
+#### `use(path, middleware)`
 
-#### `next`
+Add middleware for a specific path.
 
-Description pending...
+```javascript
+app.use('/api', apiMiddleware);
+```
 
----
+#### `get(path, ...handlers)`
 
-### Context
+Register a GET route.
 
-**File:** `src\core\context.js`
+```javascript
+app.get('/users', (ctx) => {
+  ctx.json({ users: [] });
+});
+```
 
-**Exports:**
+#### `post(path, ...handlers)`
 
-- `Context` (default)
+Register a POST route.
 
----
+```javascript
+app.post('/users', (ctx) => {
+  const user = ctx.body;
+  ctx.status(201).json({ user });
+});
+```
 
-### Middleware
+#### `put(path, ...handlers)`
 
-**File:** `src\core\middleware.js`
+Register a PUT route.
 
-**Functions:**
+```javascript
+app.put('/users/:id', (ctx) => {
+  const { id } = ctx.params;
+  const user = ctx.body;
+  ctx.json({ id, ...user });
+});
+```
 
-#### `createMiddleware`
+#### `delete(path, ...handlers)`
 
-Description pending...
+Register a DELETE route.
 
-#### `dispatch`
+```javascript
+app.delete('/users/:id', (ctx) => {
+  const { id } = ctx.params;
+  ctx.status(204).end();
+});
+```
 
-Description pending...
+#### `listen(port, callback)`
 
----
+Start the server.
 
-### Request
-
-**File:** `src\core\request.js`
-
-**Exports:**
-
-- `Request` (default)
-
-**Functions:**
-
-#### `parseRange`
-
-Description pending...
-
----
-
-### Response
-
-**File:** `src\core\response.js`
-
-**Exports:**
-
-- `Response` (default)
-
----
-
-## Middleware
-
-### Body-parser
-
-**File:** `src\middleware\body-parser.js`
-
-**Exports:**
-
-- `json` (named)
-- `urlencoded` (named)
-- `text` (named)
-- `raw` (named)
-
-**Functions:**
-
-#### `bodyParser`
-
-Description pending...
-
-#### `shouldParseJson`
-
-Description pending...
-
-#### `shouldParseUrlencoded`
-
-Description pending...
-
-#### `shouldParseMultipart`
-
-Description pending...
-
-#### `shouldParseText`
-
-Description pending...
-
-#### `shouldParseRaw`
-
-Description pending...
-
-#### `parseJson`
-
-Description pending...
-
-#### `parseUrlencoded`
-
-Description pending...
-
-#### `parseMultipart`
-
-Description pending...
-
-#### `parseText`
-
-Description pending...
-
-#### `parseRaw`
-
-Description pending...
-
-#### `readBody`
-
-Description pending...
-
-#### `getBoundary`
-
-Description pending...
-
-#### `parseMultipartData`
-
-Description pending...
-
-#### `json`
-
-Description pending...
-
-#### `urlencoded`
-
-Description pending...
-
-#### `text`
-
-Description pending...
-
-#### `raw`
-
-Description pending...
-
-#### `onData`
-
-Description pending...
-
-#### `onEnd`
-
-Description pending...
-
-#### `onError`
-
-Description pending...
-
-#### `onData`
-
-Description pending...
-
-#### `onEnd`
-
-Description pending...
-
-#### `onError`
-
-Description pending...
-
-#### `onData`
-
-Description pending...
-
-#### `onEnd`
-
-Description pending...
-
-#### `onError`
-
-Description pending...
-
----
-
-### Cache
-
-**File:** `src\middleware\cache.js`
-
-**Exports:**
-
-- `cache` (default)
-
-**Functions:**
-
-#### `cache`
-
-Description pending...
-
-#### `cacheMiddleware`
-
-Description pending...
-
-#### `defaultKeyGenerator`
-
-Description pending...
-
-#### `defaultCondition`
-
-Description pending...
-
-#### `filterHeaders`
-
-Description pending...
-
----
-
-### Compression
-
-**File:** `src\middleware\compression.js`
-
-**Exports:**
-
-- `gzip` (named)
-- `deflate` (named)
-- `brotli` (named)
-
-**Functions:**
-
-#### `compression`
-
-Description pending...
-
-#### `compressResponse`
-
-Description pending...
-
-#### `shouldCompress`
-
-Description pending...
-
-#### `getPreferredEncoding`
-
-Description pending...
-
-#### `parseAcceptEncoding`
-
-Description pending...
-
-#### `compressBuffer`
-
-Description pending...
-
-#### `gzipCompression`
-
-Description pending...
-
-#### `deflateCompression`
-
-Description pending...
-
-#### `brotliCompression`
-
-Description pending...
-
----
-
-### Cors
-
-**File:** `src\middleware\cors.js`
-
-**Exports:**
-
-- `cors` (default)
-
-**Functions:**
-
-#### `cors`
-
-Description pending...
-
-#### `getOrigin`
-
-Description pending...
-
-#### `handlePreflight`
-
-Description pending...
-
----
-
-### Health
-
-**File:** `src\middleware\health.js`
-
-**Exports:**
-
-- `createCustomCheck` (named)
-
-**Functions:**
-
-#### `healthCheck`
-
-Description pending...
-
-#### `performHealthChecks`
-
-Description pending...
-
-#### `formatUptime`
-
-Description pending...
-
-#### `createCustomCheck`
-
-Description pending...
-
----
-
-### Index
-
-**File:** `src\middleware\index.js`
-
----
-
-### Logger
-
-**File:** `src\middleware\logger.js`
-
-**Exports:**
-
-- `Logger` (named)
-- `morgan` (named)
-- `accessLog` (named)
-- `devLogger` (named)
-- `errorLogger` (named)
-- `requestLogger` (named)
-- `structuredLogger` (named)
-
-**Functions:**
-
-#### `logger`
-
-Description pending...
-
-#### `morgan`
-
-Description pending...
-
-#### `accessLog`
-
-Description pending...
-
-#### `devLogger`
-
-Description pending...
-
-#### `errorLogger`
-
-Description pending...
-
-#### `requestLogger`
-
-Description pending...
-
-#### `structuredLogger`
-
-Description pending...
-
-#### `DEFAULT_SKIP`
-
-Description pending...
-
-#### `colorStatus`
-
-Description pending...
-
-#### `colorMethod`
-
-Description pending...
-
----
-
-### Metrics
-
-**File:** `src\middleware\metrics.js`
-
-**Exports:**
-
-- `createCollector` (named)
-- `getGlobalCollector` (named)
-- `MetricsCollector` (named)
-
-**Functions:**
-
-#### `metrics`
-
-Description pending...
-
-#### `createCollector`
-
-Description pending...
-
-#### `getGlobalCollector`
-
-Description pending...
-
-#### `middleware`
-
-Description pending...
-
----
-
-### Rate-limit
-
-**File:** `src\middleware\rate-limit.js`
-
-**Exports:**
-
-- `slowDown` (named)
-- `tokenBucket` (named)
-- `MemoryStore` (named)
-
-**Functions:**
-
-#### `rateLimit`
-
-Description pending...
-
-#### `defaultKeyGenerator`
-
-Description pending...
-
-#### `defaultHandler`
-
-Description pending...
-
-#### `slowDown`
-
-Description pending...
-
-#### `tokenBucket`
-
-Description pending...
-
-#### `middleware`
-
-Description pending...
-
-#### `middleware`
-
-Description pending...
-
-#### `middleware`
-
-Description pending...
-
----
-
-### Security
-
-**File:** `src\middleware\security.js`
-
-**Exports:**
-
-- `csrf` (named)
-- `csrfToken` (named)
-- `xssProtection` (named)
-- `requestSizeLimit` (named)
-
-**Functions:**
-
-#### `security`
-
-Description pending...
-
-#### `setContentSecurityPolicy`
-
-Description pending...
-
-#### `setFrameguard`
-
-Description pending...
-
-#### `setHSTS`
-
-Description pending...
-
-#### `setReferrerPolicy`
-
-Description pending...
-
-#### `csrf`
-
-Description pending...
-
-#### `generateSecret`
-
-Description pending...
-
-#### `generateToken`
-
-Description pending...
-
-#### `verifyToken`
-
-Description pending...
-
-#### `getSecret`
-
-Description pending...
-
-#### `getTokenFromRequest`
-
-Description pending...
-
-#### `csrfToken`
-
-Description pending...
-
-#### `xssProtection`
-
-Description pending...
-
-#### `escapeHtml`
-
-Description pending...
-
-#### `escapeJsonValues`
-
-Description pending...
-
-#### `requestSizeLimit`
-
-Description pending...
-
-#### `throwMissingCsrfSecretError`
-
-Description pending...
-
----
-
-### Session
-
-**File:** `src\middleware\session.js`
-
-**Exports:**
-
-- `MemoryStore` (named)
-- `FileStore` (named)
-
-**Functions:**
-
-#### `session`
-
-Description pending...
-
-#### `getSessionId`
-
-Description pending...
-
-#### `createSessionProxy`
-
-Description pending...
-
-#### `saveSession`
-
-Description pending...
-
-#### `generateSessionId`
-
-Description pending...
-
-#### `signCookie`
-
-Description pending...
-
-#### `unsignCookie`
-
-Description pending...
-
-#### `throwMissingSecretError`
-
-Description pending...
-
----
-
-### Static
-
-**File:** `src\middleware\static.js`
-
-**Exports:**
-
-- `serveStatic` (named)
-
-**Functions:**
-
-#### `staticFiles`
-
-Description pending...
-
-#### `handleDirectory`
-
-Description pending...
-
-#### `tryExtensions`
-
-Description pending...
-
-#### `sendFile`
-
-Description pending...
-
-#### `sendRangeFile`
-
-Description pending...
-
-#### `parseRange`
-
-Description pending...
-
-#### `getContentType`
-
-Description pending...
-
-#### `generateETag`
-
-Description pending...
-
-#### `serveStatic`
-
-Description pending...
-
----
+```javascript
+app.listen(3000, () => {
+  console.log('Server running on port 3000');
+});
+```
 
 ## Router
 
-### Layer
+Advanced routing system with support for parameters and middleware.
 
-**File:** `src\router\layer.js`
+### Constructor
 
-**Exports:**
+```javascript
+const router = new Router();
+```
 
-- `Layer` (default)
+### Methods
 
-**Functions:**
+#### `get(path, ...handlers)`
 
-#### `decodeParam`
+Register a GET route on the router.
 
-Description pending...
+```javascript
+router.get('/users/:id', (ctx) => {
+  ctx.json({ id: ctx.params.id });
+});
+```
 
----
+#### `post(path, ...handlers)`
 
-### Route
+Register a POST route on the router.
 
-**File:** `src\router\route.js`
+#### `put(path, ...handlers)`
 
-**Exports:**
+Register a PUT route on the router.
 
-- `Route` (default)
+#### `delete(path, ...handlers)`
 
-**Functions:**
+Register a DELETE route on the router.
 
-#### `next`
+#### `use(middleware)`
 
-Description pending...
+Add middleware to the router.
 
----
+```javascript
+router.use((ctx, next) => {
+  // Router-level middleware
+  return next();
+});
+```
 
-### Router
+#### `routes()`
 
-**File:** `src\router\router.js`
+Get the router middleware function.
 
-**Exports:**
+```javascript
+app.use('/api', router.routes());
+```
 
-- `Router` (default)
+## Context
 
-**Functions:**
+The request/response context object.
 
-#### `routerMiddleware`
+### Properties
 
-Description pending...
+#### `req`
 
-#### `routerMiddleware`
+The Node.js request object.
 
-Description pending...
+#### `res`
 
-#### `getFlags`
+The Node.js response object.
 
-Description pending...
+#### `method`
 
-#### `nextLayer`
+The HTTP method (GET, POST, etc.).
 
-Description pending...
+#### `path`
 
----
+The request path.
 
-## Utilities
+#### `query`
 
-### Async-handler
+Parsed query string parameters.
 
-**File:** `src\utils\async-handler.js`
+```javascript
+// GET /users?limit=10&offset=20
+ctx.query.limit  // '10'
+ctx.query.offset // '20'
+```
 
-**Functions:**
+#### `params`
 
-#### `asyncHandler`
+Route parameters.
 
-Description pending...
+```javascript
+// Route: /users/:id
+// URL: /users/123
+ctx.params.id // '123'
+```
 
-#### `wrapAsync`
+#### `body`
 
-Description pending...
+Parsed request body (requires body-parser middleware).
 
-#### `errorHandler`
+#### `headers`
 
-Description pending...
+Request headers.
 
-#### `handleErrorResponse`
+#### `cookies`
 
-Description pending...
+Parsed cookies.
 
-#### `createError`
+#### `session`
 
-Description pending...
+Session object (requires session middleware).
 
----
+### Methods
 
-### Cache
+#### `get(headerName)`
 
-**File:** `src\utils\cache.js`
+Get a request header.
 
-**Functions:**
+```javascript
+const userAgent = ctx.get('user-agent');
+```
 
-#### `createCache`
+#### `set(headerName, value)`
 
-Description pending...
+Set a response header.
 
-#### `memoize`
+```javascript
+ctx.set('content-type', 'application/json');
+```
 
-Description pending...
+#### `status(code)`
 
-#### `asyncMemoize`
+Set the response status code.
 
-Description pending...
+```javascript
+ctx.status(404);
+```
 
----
+#### `json(data)`
 
-### Context-pool
+Send a JSON response.
 
-**File:** `src\utils\context-pool.js`
+```javascript
+ctx.json({ message: 'Hello World' });
+```
 
-**Exports:**
+#### `text(data)`
 
-- `ContextPool` (default)
+Send a text response.
 
----
+```javascript
+ctx.text('Hello World');
+```
 
-### Error-types
+#### `html(data)`
 
-**File:** `src\utils\error-types.js`
+Send an HTML response.
 
----
+```javascript
+ctx.html('<h1>Hello World</h1>');
+```
 
-### Http
+#### `redirect(url, status)`
 
-**File:** `src\utils\http.js`
+Redirect to a URL.
 
-**Functions:**
+```javascript
+ctx.redirect('/login'); // 302 redirect
+ctx.redirect('/login', 301); // 301 redirect
+```
 
-#### `isHttpError`
+#### `setCookie(name, value, options)`
 
-Description pending...
+Set a cookie.
 
-#### `isClientError`
+```javascript
+ctx.setCookie('session', 'abc123', {
+  httpOnly: true,
+  secure: true,
+  maxAge: 3600000 // 1 hour
+});
+```
 
-Description pending...
+#### `clearCookie(name)`
 
-#### `isServerError`
+Clear a cookie.
 
-Description pending...
+```javascript
+ctx.clearCookie('session');
+```
 
-#### `isRedirect`
+## Middleware
 
-Description pending...
+Middleware functions have access to the context object and next function.
 
-#### `isSuccess`
+### Structure
 
-Description pending...
+```javascript
+async function middleware(ctx, next) {
+  // Do something before
+  await next();
+  // Do something after
+}
+```
 
-#### `isInformational`
+### Error Handling
 
-Description pending...
+```javascript
+async function errorHandler(ctx, next) {
+  try {
+    await next();
+  } catch (error) {
+    ctx.status(500).json({ error: error.message });
+  }
+}
+```
 
-#### `getStatusText`
+## Built-in Middleware
 
-Description pending...
+### Body Parser
 
-#### `getMimeType`
+Parse request bodies.
 
-Description pending...
+```javascript
+const bodyParser = require('@oxog/spark/middleware/body-parser');
 
-#### `parseContentType`
+app.use(bodyParser({
+  limit: '1mb',
+  type: 'json'
+}));
+```
 
-Description pending...
+### CORS
 
-#### `parseAccept`
+Handle Cross-Origin Resource Sharing.
 
-Description pending...
+```javascript
+const cors = require('@oxog/spark/middleware/cors');
 
-#### `parseRange`
+app.use(cors({
+  origin: 'https://example.com',
+  credentials: true
+}));
+```
 
-Description pending...
+### Session
 
-#### `parseAuthorizationHeader`
+Session management with auto-save.
 
-Description pending...
+```javascript
+const session = require('@oxog/spark/middleware/session');
 
-#### `parseUserAgent`
+app.use(session({
+  secret: 'your-secret-key',
+  saveUninitialized: true,
+  cookie: {
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production'
+  }
+}));
+```
 
-Description pending...
+### Security
 
-#### `createError`
+Security headers and protection.
 
-Description pending...
+```javascript
+const security = require('@oxog/spark/middleware/security');
 
-#### `isValidMethod`
+app.use(security({
+  contentSecurityPolicy: true,
+  xssProtection: true,
+  noSniff: true
+}));
+```
 
-Description pending...
+### Rate Limiting
 
-#### `parseQuery`
+Request rate limiting.
 
-Description pending...
+```javascript
+const rateLimit = require('@oxog/spark/middleware/rate-limit');
 
-#### `stringifyQuery`
+app.use(rateLimit({
+  max: 100,
+  windowMs: 60000, // 1 minute
+  message: 'Too many requests'
+}));
+```
 
-Description pending...
+### Compression
 
-#### `parseUrl`
+Response compression.
 
-Description pending...
+```javascript
+const compression = require('@oxog/spark/middleware/compression');
 
-#### `formatUrl`
+app.use(compression({
+  threshold: 1024,
+  level: 6
+}));
+```
 
-Description pending...
+### Static Files
 
----
+Serve static files.
 
-### Regex-validator
+```javascript
+const staticFiles = require('@oxog/spark/middleware/static');
 
-**File:** `src\utils\regex-validator.js`
+app.use('/public', staticFiles({
+  root: './public',
+  maxAge: 86400000 // 1 day
+}));
+```
 
----
+### Logger
 
+Request logging.
+
+```javascript
+const logger = require('@oxog/spark/middleware/logger');
+
+app.use(logger({
+  format: ':method :url :status :response-time ms'
+}));
+```
+
+### Health Check
+
+Health monitoring endpoints.
+
+```javascript
+const health = require('@oxog/spark/middleware/health');
+
+app.use('/health', health({
+  path: '/health',
+  checks: {
+    database: () => checkDatabase(),
+    redis: () => checkRedis()
+  }
+}));
+```
+
+## Error Handling
+
+### Custom Error Classes
+
+```javascript
+class ValidationError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'ValidationError';
+    this.status = 400;
+  }
+}
+```
+
+### Global Error Handler
+
+```javascript
+app.use(async (ctx, next) => {
+  try {
+    await next();
+  } catch (error) {
+    ctx.status(error.status || 500);
+    ctx.json({
+      error: {
+        message: error.message,
+        name: error.name,
+        ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
+      }
+    });
+  }
+});
+```
+
+### Error Events
+
+```javascript
+app.on('error', (error, ctx) => {
+  console.error('Application error:', error);
+  // Log to external service
+});
+```
+
+## TypeScript Support
+
+Full TypeScript definitions are included.
+
+```typescript
+import { Spark, Router, Context } from '@oxog/spark';
+
+const app = new Spark();
+
+app.get('/', (ctx: Context) => {
+  ctx.json({ message: 'Hello TypeScript!' });
+});
+```
+
+## Examples
+
+### Complete API Server
+
+```javascript
+const { Spark, Router } = require('@oxog/spark');
+
+const app = new Spark();
+const api = new Router();
+
+// Middleware
+app.use(require('@oxog/spark/middleware/logger')());
+app.use(require('@oxog/spark/middleware/cors')());
+app.use(require('@oxog/spark/middleware/body-parser')());
+
+// Routes
+api.get('/users', (ctx) => {
+  ctx.json({ users: [] });
+});
+
+api.post('/users', (ctx) => {
+  const user = ctx.body;
+  ctx.status(201).json({ user });
+});
+
+// Mount router
+app.use('/api/v1', api.routes());
+
+// Start server
+app.listen(3000);
+```
+
+### Authentication Example
+
+```javascript
+const { Spark, Router } = require('@oxog/spark');
+
+const app = new Spark();
+const api = new Router();
+
+// Session middleware
+app.use(require('@oxog/spark/middleware/session')({
+  secret: 'your-secret-key',
+  saveUninitialized: true
+}));
+
+// Authentication middleware
+function requireAuth(ctx, next) {
+  if (!ctx.session.userId) {
+    return ctx.status(401).json({ error: 'Authentication required' });
+  }
+  return next();
+}
+
+// Login
+api.post('/auth/login', (ctx) => {
+  const { email, password } = ctx.body;
+  
+  if (authenticate(email, password)) {
+    ctx.session.userId = user.id;
+    ctx.json({ success: true });
+  } else {
+    ctx.status(401).json({ error: 'Invalid credentials' });
+  }
+});
+
+// Protected route
+api.get('/profile', requireAuth, (ctx) => {
+  const user = getUserById(ctx.session.userId);
+  ctx.json({ user });
+});
+
+app.use('/api', api.routes());
+app.listen(3000);
+```
