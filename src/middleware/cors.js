@@ -1,3 +1,5 @@
+'use strict';
+
 const DEFAULT_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'];
 
 function cors(options = {}) {

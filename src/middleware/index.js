@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * Middleware exports for @oxog/spark
  * Aggregates all built-in middleware for convenient importing

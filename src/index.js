@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * @fileoverview Main entry point for the Spark Web Framework
  * @author Spark Framework Team

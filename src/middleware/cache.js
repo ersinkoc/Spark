@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * Cache middleware for @oxog/spark
  * Provides response caching functionality

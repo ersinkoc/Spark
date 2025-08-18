@@ -1,3 +1,5 @@
+'use strict';
+
 class Route {
   constructor(path) {
     this.path = path;

@@ -1,3 +1,5 @@
+'use strict';
+
 const Context = require('../core/context');
 
 /**

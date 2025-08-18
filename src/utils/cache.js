@@ -1,3 +1,5 @@
+'use strict';
+
 const { EventEmitter } = require('events');
 
 const DEFAULT_TTL = 300000; // 5 minutes

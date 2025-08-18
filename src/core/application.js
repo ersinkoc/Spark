@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * @fileoverview Core Application class for the Spark Web Framework
  * @author Spark Framework Team
@@ -39,7 +41,7 @@ const { errorHandler } = require('../utils/async-handler');
  * const app = new Application({ port: 3000 });
  * 
  * app.use((ctx, next) => {
- *   console.log(`${ctx.method} ${ctx.path}`);
+ *   // Console.log removed for production
  *   return next();
  * });
  * 
@@ -246,7 +248,7 @@ class Application extends EventEmitter {
   setupShutdownHandlers() {
     // Graceful shutdown on SIGTERM and SIGINT
     const shutdownHandler = (signal) => {
-      console.log(`\nReceived ${signal}, starting graceful shutdown...`);
+      // Console.log removed for production
       this.gracefulShutdown();
     };
     
@@ -274,7 +276,7 @@ class Application extends EventEmitter {
    * @example
    * // Global middleware
    * app.use((ctx, next) => {
-   *   console.log(`${ctx.method} ${ctx.path}`);
+   *   // Console.log removed for production
    *   return next();
    * });
    * 
@@ -702,7 +704,7 @@ class Application extends EventEmitter {
    * @example
    * // With callback
    * app.listen(3000, () => {
-   *   console.log('Server started on port 3000');
+   *   // Console.log removed for production
    * });
    */
   listen(port, host, callback) {
@@ -742,14 +744,14 @@ class Application extends EventEmitter {
   startCluster(port, host, callback) {
     const numCPUs = os.cpus().length;
     
-    console.log(`Starting cluster with ${numCPUs} workers...`);
+    // Console.log removed for production
     
     for (let i = 0; i < numCPUs; i++) {
       cluster.fork();
     }
 
     cluster.on('exit', (worker, code, signal) => {
-      console.log(`Worker ${worker.process.pid} died. Starting a new worker...`);
+      // Console.log removed for production
       cluster.fork();
     });
 
@@ -786,7 +788,7 @@ class Application extends EventEmitter {
     this.server.listen(port, host, () => {
       this.listening = true;
       const address = this.server.address();
-      console.log(`Server listening on ${address.address}:${address.port}`);
+      // Console.log removed for production
       
       if (callback) {
         callback();
@@ -811,7 +813,7 @@ class Application extends EventEmitter {
    * @example
    * // Graceful shutdown
    * await app.close();
-   * console.log('Server closed successfully');
+   * // Console.log removed for production
    */
   async close() {
     if (!this.server) {
@@ -843,7 +845,7 @@ class Application extends EventEmitter {
       // Force close all connections after 10 seconds
       setTimeout(() => {
         if (this.server && this.server.listening) {
-          console.log('Force closing remaining connections...');
+          // Console.log removed for production
           this.server.unref();
         }
       }, 10000);
@@ -862,7 +864,7 @@ class Application extends EventEmitter {
    * @since 1.0.0
    */
   async runCleanupHandlers() {
-    console.log('Running cleanup handlers...');
+    // Console.log removed for production
     
     for (const handler of this.cleanupHandlers) {
       try {
@@ -893,11 +895,11 @@ class Application extends EventEmitter {
    * });
    */
   async gracefulShutdown() {
-    console.log('Graceful shutdown initiated...');
+    // Console.log removed for production
     
     // Prevent multiple shutdown attempts
     if (this.shuttingDown) {
-      console.log('Shutdown already in progress...');
+      // Console.log removed for production
       return;
     }
     this.shuttingDown = true;
@@ -914,7 +916,7 @@ class Application extends EventEmitter {
         new Promise(resolve => setTimeout(resolve, 30000)) // 30 seconds max
       ]);
       
-      console.log('Server closed successfully');
+      // Console.log removed for production
       process.exit(0);
     } catch (error) {
       console.error('Error during shutdown:', error);
@@ -937,7 +939,7 @@ class Application extends EventEmitter {
    * // Register database cleanup
    * app.onShutdown(async () => {
    *   await database.close();
-   *   console.log('Database connection closed');
+   *   // Console.log removed for production
    * });
    * 
    * @example

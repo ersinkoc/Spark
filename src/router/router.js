@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * @fileoverview Router class for handling HTTP routes in Spark Framework
  * @author Spark Framework Team
@@ -117,7 +119,7 @@ class Router {
    * @example
    * // Global middleware
    * router.use((ctx, next) => {
-   *   console.log(`${ctx.method} ${ctx.path}`);
+   *   // Console.log removed for production
    *   return next();
    * });
    * 
@@ -690,7 +692,7 @@ class Router {
    * 
    * @example
    * const routes = router.routes;
-   * console.log(`Router has ${routes.length} routes`);
+   * // Console.log removed for production
    */
   get routes() {
     return this.stack.filter(layer => layer.route);

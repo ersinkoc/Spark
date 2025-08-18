@@ -1,3 +1,5 @@
+'use strict';
+
 const { STATUS_CODES } = require('http');
 
 const HTTP_STATUS = {

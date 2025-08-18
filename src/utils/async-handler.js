@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * Wraps async route handlers to properly catch errors
  * @param {Function} fn - Async function to wrap
@@ -10,8 +12,11 @@ function asyncHandler(fn) {
     // If it's a promise, catch any errors
     if (result && typeof result.then === 'function') {
       return result.catch((error) => {
-        // Pass error to the next middleware
-        return next(error);
+        // Handle error appropriately
+        if (ctx && ctx.app) {
+          ctx.app.emit('error', error, ctx);
+        }
+        throw error; // Re-throw to be caught by framework
       });
     }
     

@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * @fileoverview Context class for handling HTTP requests and responses in Spark Framework
  * @author Spark Framework Team

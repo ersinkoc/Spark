@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * @fileoverview Body parsing middleware for Spark Framework
  * @author Spark Framework Team

@@ -1,3 +1,5 @@
+'use strict';
+
 const DEFAULT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const DEFAULT_MAX_REQUESTS = 100;
 const DEFAULT_MESSAGE = 'Too many requests, please try again later.';

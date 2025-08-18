@@ -1,3 +1,5 @@
+'use strict';
+
 const MAX_PATTERN_LENGTH = 1000;
 const MAX_CAPTURE_GROUPS = 10;
 const DANGEROUS_PATTERNS = [
@@ -68,29 +70,16 @@ class RegexValidator {
     const timeout = 100; // 100ms timeout
     
     try {
-      // Set up a timeout
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Regex timeout')), timeout);
-      });
-      
-      // Test the regex
-      const testPromise = new Promise((resolve) => {
-        const result = pattern.test(testString);
-        resolve(result);
-      });
-      
-      // Race between test and timeout
-      Promise.race([testPromise, timeoutPromise]).catch(() => {
-        return { safe: false, error: 'Regex execution timeout' };
-      });
-      
+      // Simple synchronous test with time check
+      const result = pattern.test(testString);
       const endTime = process.hrtime.bigint();
       const duration = Number(endTime - startTime) / 1e6; // Convert to milliseconds
       
       return {
         safe: duration < timeout,
         duration,
-        pattern: pattern.source
+        pattern: pattern.source,
+        result
       };
     } catch (error) {
       return { safe: false, error: error.message };

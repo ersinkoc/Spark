@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * Custom error classes for Spark framework
  */

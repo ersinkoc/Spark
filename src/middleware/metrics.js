@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * Metrics collection middleware for performance monitoring
  */

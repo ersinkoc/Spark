@@ -16,7 +16,7 @@ const iterations = 100; // Reduced for more realistic testing
 async function runMemoryTest() {
   // Increase max listeners to avoid warnings
   process.setMaxListeners(100);
-  
+
   // Force garbage collection if available
   if (global.gc) {
     global.gc();
@@ -38,7 +38,7 @@ async function runMemoryTest() {
   console.log('\nTest 2: Testing request handling...');
   const app = new Spark();
   let contexts = [];
-  
+
   app.use((ctx, next) => {
     // Store reference to test cleanup
     contexts.push(ctx);
@@ -74,7 +74,7 @@ async function runMemoryTest() {
   // Test 3: Middleware chains
   console.log('\nTest 3: Testing middleware chains...');
   const app2 = new Spark();
-  
+
   // Add many middleware
   for (let i = 0; i < iterations; i++) {
     app2.use(async (ctx, next) => {

@@ -1,3 +1,5 @@
+'use strict';
+
 const bodyParser = require('../middleware/body-parser');
 const cors = require('../middleware/cors');
 const compression = require('../middleware/compression');

@@ -1,3 +1,5 @@
+'use strict';
+
 class Layer {
   constructor(path, options, handler, router = null) {
     this.path = path;
