@@ -5,7 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.1] - 2025-07-17
+## [1.1.1] - 2025-08-18
+
+### 🐛 Bug Fixes & Code Quality Improvements
+
+#### Fixed
+- **Code Quality**: Added 'use strict' directives to all source files for better error catching
+- **Whitespace Issues**: Removed trailing whitespace in test files
+- **Production Logging**: Removed console.log statements from production code
+- **Regex Validator**: Fixed async performance check to work synchronously
+- **Error Handling**: Improved async error handler to properly emit errors to application
+- **Context Pooling**: Verified and maintained proper init() and reset() methods
+
+#### Added
+- **Bug Fix Tests**: Comprehensive test suite to verify all bug fixes
+- **Maintenance Scripts**: Added utility scripts for code quality maintenance
+  - `fix-use-strict.js`: Adds 'use strict' to all source files
+  - `remove-console-logs.js`: Removes debug logging from production
+
+#### Security
+- No vulnerabilities found in dependencies
+- All security tests pass
+
+## [1.1.0] - 2025-07-17
 
 ### 🔧 Production Validation & Bug Fixes
 
