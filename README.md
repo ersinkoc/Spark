@@ -20,6 +20,10 @@ A fast, lightweight, and zero-dependency Node.js web framework built for perform
 
 ## 📦 Installation
 
+### Prerequisites
+
+- Node.js >= 14.0.0
+
 ```bash
 npm install @oxog/spark
 ```
@@ -29,14 +33,17 @@ npm install @oxog/spark
 ```javascript
 const { Spark } = require('@oxog/spark');
 
-const app = new Spark();
-
-app.get('/', (ctx) => {
-  ctx.json({ message: 'Hello World!' });
+const app = new Spark({
+  port: 3000,
+  host: '0.0.0.0'
 });
 
-app.listen(3000, () => {
-  console.log('Server running on port 3000');
+app.get('/', (ctx) => {
+  ctx.json({ message: 'Welcome to Spark!' });
+});
+
+app.listen(() => {
+  console.log(`Server is running at http://localhost:3000`);
 });
 ```
 
@@ -159,21 +166,28 @@ app.listen(3000);
 
 ### With Middleware
 ```javascript
-const { Spark } = require('@oxog/spark');
+const { Spark, middleware } = require('@oxog/spark');
 
 const app = new Spark();
 
 // Global middleware
-app.use(require('@oxog/spark/middleware/logger')());
-app.use(require('@oxog/spark/middleware/cors')());
+app.use(middleware.logger());
+app.use(middleware.cors({
+  origin: 'https://example.com'
+}));
 
 // Route-specific middleware
-app.get('/protected', 
-  require('@oxog/spark/middleware/auth'),
-  (ctx) => {
-    ctx.json({ message: 'Protected route' });
+const auth = (ctx, next) => {
+  const token = ctx.get('Authorization');
+  if (!token || token !== 'Bearer valid-token') {
+    return ctx.status(401).json({ error: 'Unauthorized' });
   }
-);
+  return next();
+};
+
+app.get('/protected', auth, (ctx) => {
+  ctx.json({ message: 'This is a protected route.' });
+});
 
 app.listen(3000);
 ```
