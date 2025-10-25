@@ -18,8 +18,8 @@ class RegexValidator {
       return true;
     }
     
-    // Count capture groups, excluding non-capturing groups (?:...)
-    const captureGroups = pattern.match(/\((?!\?:)[^)]*\)/g) || [];
+    // Count capture groups
+    const captureGroups = pattern.match(/\([^)]*\)/g) || [];
     if (captureGroups.length > MAX_CAPTURE_GROUPS) {
       return true;
     }
