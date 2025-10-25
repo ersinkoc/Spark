@@ -560,11 +560,16 @@ class Application extends EventEmitter {
    * @since 1.0.0
    */
   async executeMiddleware(ctx) {
-    const routerHandler = (ctx, next) => this.router.handle(ctx, next);
-    const middlewares = this.middlewares.concat(routerHandler);
+    const middlewares = [...this.middlewares];
+
+    middlewares.push((ctx, next) => {
+      return this.router.handle(ctx, next);
+    });
+
     let index = 0;
 
     const next = async (error) => {
+      // If an error is passed, handle it
       if (error) {
         await this.handleError(error, ctx);
         return;
@@ -578,11 +583,7 @@ class Application extends EventEmitter {
       }
 
       const middleware = middlewares[index++];
-      try {
-        await middleware(ctx, next);
-      } catch (err) {
-        await this.handleError(err, ctx);
-      }
+      await middleware(ctx, next);
     };
 
     await next();
