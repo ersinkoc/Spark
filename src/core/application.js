@@ -560,30 +560,29 @@ class Application extends EventEmitter {
    * @since 1.0.0
    */
   async executeMiddleware(ctx) {
-    const middlewares = [...this.middlewares];
-    
-    middlewares.push((ctx, next) => {
-      return this.router.handle(ctx, next);
-    });
-
+    const routerHandler = (ctx, next) => this.router.handle(ctx, next);
+    const middlewares = this.middlewares.concat(routerHandler);
     let index = 0;
-    
+
     const next = async (error) => {
-      // If an error is passed, handle it
       if (error) {
         await this.handleError(error, ctx);
         return;
       }
-      
+
       if (index >= middlewares.length) {
         if (!ctx.responded) {
           ctx.status(404).json({ error: 'Not Found' });
         }
         return;
       }
-      
+
       const middleware = middlewares[index++];
-      await middleware(ctx, next);
+      try {
+        await middleware(ctx, next);
+      } catch (err) {
+        await this.handleError(err, ctx);
+      }
     };
 
     await next();

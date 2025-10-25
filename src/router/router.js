@@ -398,45 +398,44 @@ class Router {
    * @since 1.0.0
    */
   async handle(ctx, next) {
-    let layerError = null;
-    let layerIndex = 0;
-    
+    let index = 0;
+
     const nextLayer = async (error) => {
       if (error) {
-        layerError = error;
+        return next(error);
       }
 
-      if (layerIndex >= this.stack.length) {
-        return next(layerError);
+      if (index >= this.stack.length) {
+        return next();
       }
 
-      const layer = this.stack[layerIndex++];
+      const layer = this.stack[index++];
       const match = layer.match(ctx.path);
 
       if (!match) {
-        return nextLayer(layerError);
+        return nextLayer();
       }
 
+      const originalParams = ctx.params;
+      const originalPath = ctx.path;
       ctx.params = { ...ctx.params, ...match.params };
-
       if (match.path !== undefined) {
         ctx.path = match.path;
       }
 
       try {
         await this.processParams(ctx, layer, match.params);
-        
-        if (layer.route) {
-          if (layer.route.handles_method(ctx.method)) {
-            await layer.handle(ctx, nextLayer);
-          } else {
-            nextLayer();
-          }
-        } else {
-          await layer.handle(ctx, nextLayer);
+        if (layer.route && !layer.route.handles_method(ctx.method)) {
+          ctx.params = originalParams;
+          ctx.path = originalPath;
+          return nextLayer();
         }
+        await layer.handle(ctx, nextLayer);
       } catch (err) {
         nextLayer(err);
+      } finally {
+        ctx.params = originalParams;
+        ctx.path = originalPath;
       }
     };
 
