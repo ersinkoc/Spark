@@ -87,7 +87,7 @@ class Layer {
     if (this.handler.length > 2) {
       return this.handler(ctx, next);
     } else {
-      await this.handler(ctx, next);
+      return await this.handler(ctx, next);
     }
   }
 
