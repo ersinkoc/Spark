@@ -720,7 +720,10 @@ class Application extends EventEmitter {
     port = port !== undefined ? port : this.options.port;
     host = host || this.options.host;
 
-    if (this.options.cluster && cluster.isMaster) {
+    // Use isPrimary (Node.js v16+) with fallback to isMaster for older versions
+    const isPrimary = cluster.isPrimary !== undefined ? cluster.isPrimary : cluster.isMaster;
+
+    if (this.options.cluster && isPrimary) {
       return this.startCluster(port, host, callback);
     }
 
