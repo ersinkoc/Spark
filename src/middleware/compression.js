@@ -58,12 +58,11 @@ async function compressResponse(body, opts, originalSend) {
 
   try {
     const compressed = await compressBuffer(bodyBuffer, encoding, opts);
-    
+
     this.set('Content-Encoding', encoding);
     this.set('Content-Length', compressed.length);
-    this.removeHeader('Content-Length');
     this.set('Vary', 'Accept-Encoding');
-    
+
     return originalSend.call(this, compressed);
   } catch (error) {
     return originalSend.call(this, body);

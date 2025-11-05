@@ -40,7 +40,7 @@ function cache(options = {}) {
     const cached = store.get(cacheKey);
     if (cached && cached.expires > Date.now()) {
       // Serve from cache
-      ctx.status = cached.status;
+      ctx.status(cached.status);
       ctx.body = cached.body;
       ctx.set(cached.headers);
       ctx.set('X-Cache', 'HIT');
@@ -52,9 +52,9 @@ function cache(options = {}) {
     await next();
 
     // Store response in cache if successful
-    if (ctx.status >= 200 && ctx.status < 300 && ctx.body) {
+    if (ctx.statusCode >= 200 && ctx.statusCode < 300 && ctx.body) {
       const cacheEntry = {
-        status: ctx.status,
+        status: ctx.statusCode,
         body: ctx.body,
         headers: filterHeaders(ctx.headers),
         created: Date.now(),
@@ -62,7 +62,7 @@ function cache(options = {}) {
       };
 
       store.set(cacheKey, cacheEntry);
-      
+
       // Set cache headers
       ctx.set('Cache-Control', `public, max-age=${maxAge}`);
       ctx.set('X-Cache', 'MISS');

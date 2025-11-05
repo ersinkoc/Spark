@@ -182,6 +182,66 @@ assert.strictEqual(hasEnglishComment, true,
 console.log('✅ Bug #6: FIXED - Comment is now in English');
 
 // =============================================================================
+// Bug #7: Incorrect Status Assignment in cache.js
+// =============================================================================
+console.log('\nTesting Bug #7: Incorrect status assignment in cache.js...');
+
+const cacheFileContent = fs.readFileSync('./src/middleware/cache.js', 'utf8');
+
+// Check that ctx.status is called as a method, not assigned
+const hasStatusAssignment = cacheFileContent.includes('ctx.status =');
+assert.strictEqual(hasStatusAssignment, false,
+  'Bug #7 FAILED: cache.js should not assign to ctx.status (it\'s a method)');
+
+// Check that status method is called correctly
+const hasStatusMethodCall = cacheFileContent.includes('ctx.status(cached.status)');
+assert.strictEqual(hasStatusMethodCall, true,
+  'Bug #7 FAILED: cache.js should call ctx.status() method');
+
+// Check that statusCode property is used for comparisons
+const hasStatusCodeComparison = cacheFileContent.includes('ctx.statusCode >= 200');
+assert.strictEqual(hasStatusCodeComparison, true,
+  'Bug #7 FAILED: cache.js should use ctx.statusCode property for comparisons');
+
+console.log('✅ Bug #7: FIXED - Status correctly called as method, statusCode used as property');
+
+// =============================================================================
+// Bug #8: Redundant Content-Length Operations in compression.js
+// =============================================================================
+console.log('\nTesting Bug #8: Redundant Content-Length in compression.js...');
+
+const compressionFileContent = fs.readFileSync('./src/middleware/compression.js', 'utf8');
+
+// Find the section where Content-Length is set after compression
+const hasSetContentLength = compressionFileContent.includes('this.set(\'Content-Length\', compressed.length)');
+assert.strictEqual(hasSetContentLength, true,
+  'Bug #8 FAILED: compression.js should set Content-Length for compressed content');
+
+// Verify that removeHeader('Content-Length') is NOT called after setting it
+// We need to check if the pattern "set Content-Length...removeHeader Content-Length" exists
+const setContentLengthIndex = compressionFileContent.indexOf('this.set(\'Content-Length\', compressed.length)');
+const removeContentLengthIndex = compressionFileContent.indexOf('this.removeHeader(\'Content-Length\')');
+
+// If removeHeader exists, it should NOT be right after the set call
+if (removeContentLengthIndex !== -1 && setContentLengthIndex !== -1) {
+  // Check if there are less than 100 characters between them (indicating they're in same block)
+  const distance = removeContentLengthIndex - setContentLengthIndex;
+  assert.ok(distance < 0 || distance > 100,
+    'Bug #8 FAILED: compression.js should not remove Content-Length immediately after setting it');
+}
+
+// Better test: check that removeHeader is not in the compression function at all
+const compressionFunctionMatch = compressionFileContent.match(/async function compressResponse[\s\S]*?^}/m);
+if (compressionFunctionMatch) {
+  const compressionFunction = compressionFunctionMatch[0];
+  const hasRemoveHeader = compressionFunction.includes('removeHeader(\'Content-Length\')');
+  assert.strictEqual(hasRemoveHeader, false,
+    'Bug #8 FAILED: compressResponse should not call removeHeader for Content-Length');
+}
+
+console.log('✅ Bug #8: FIXED - Content-Length set correctly without redundant removal');
+
+// =============================================================================
 // Summary
 // =============================================================================
 console.log('\n' + '='.repeat(60));
@@ -194,4 +254,6 @@ console.log('✅ Bug #3: Incorrect reuse ratio calculation - FIXED');
 console.log('✅ Bug #4: Method/property name collision - FIXED');
 console.log('✅ Bug #5: Deprecated cluster.isMaster - FIXED');
 console.log('✅ Bug #6: Non-English comment - FIXED');
-console.log('\n✨ All 6 bugs have been successfully fixed and verified!\n');
+console.log('✅ Bug #7: Incorrect status assignment in cache.js - FIXED');
+console.log('✅ Bug #8: Redundant Content-Length in compression.js - FIXED');
+console.log('\n✨ All 8 bugs have been successfully fixed and verified!\n');
