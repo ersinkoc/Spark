@@ -76,9 +76,9 @@ class Route {
       return true;
     }
 
-    // Method'lar büyük harfle kaydediliyor, bu yüzden büyük harfe çevir
+    // Methods are stored in uppercase, so convert to uppercase
     const name = method.toUpperCase();
-    
+
     if (name === 'HEAD' && !this.methods.HEAD) {
       return this.methods.GET;
     }

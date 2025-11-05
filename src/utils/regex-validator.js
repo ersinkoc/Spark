@@ -18,9 +18,10 @@ class RegexValidator {
       return true;
     }
     
-    // Count capture groups
-    const captureGroups = pattern.match(/\([^)]*\)/g) || [];
-    if (captureGroups.length > MAX_CAPTURE_GROUPS) {
+    // Count capture groups (excluding non-capturing groups like (?:...))
+    // Match opening parens that are not escaped and not followed by ?
+    const captureGroups = (pattern.match(/(?<!\\)\((?!\?)/g) || []).length;
+    if (captureGroups > MAX_CAPTURE_GROUPS) {
       return true;
     }
     

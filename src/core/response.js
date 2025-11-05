@@ -348,10 +348,6 @@ class Response {
     return this;
   }
 
-  headersSent() {
-    return this.headersSent;
-  }
-
   writableEnded() {
     return this.res.writableEnded;
   }

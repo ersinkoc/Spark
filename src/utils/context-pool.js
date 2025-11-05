@@ -52,12 +52,13 @@ class ContextPool {
    * @returns {Object} Pool stats
    */
   getStats() {
+    const totalAcquisitions = this.created + this.reused;
     return {
       poolSize: this.pool.length,
       maxSize: this.maxSize,
       created: this.created,
       reused: this.reused,
-      reuseRatio: this.created > 0 ? (this.reused / this.created * 100).toFixed(2) + '%' : '0%'
+      reuseRatio: totalAcquisitions > 0 ? (this.reused / totalAcquisitions * 100).toFixed(2) + '%' : '0%'
     };
   }
   
