@@ -42,7 +42,12 @@ function cache(options = {}) {
       // Serve from cache
       ctx.status(cached.status);
       ctx.body = cached.body;
-      ctx.set(cached.headers);
+
+      // Set cached headers individually
+      for (const [name, value] of Object.entries(cached.headers)) {
+        ctx.set(name, value);
+      }
+
       ctx.set('X-Cache', 'HIT');
       ctx.set('Age', Math.floor((Date.now() - cached.created) / 1000));
       return;
@@ -56,7 +61,7 @@ function cache(options = {}) {
       const cacheEntry = {
         status: ctx.statusCode,
         body: ctx.body,
-        headers: filterHeaders(ctx.headers),
+        headers: filterHeaders(ctx.responseHeaders),
         created: Date.now(),
         expires: Date.now() + (maxAge * 1000)
       };
@@ -76,7 +81,7 @@ function cache(options = {}) {
  * @returns {string} Cache key
  */
 function defaultKeyGenerator(ctx) {
-  return ctx.url;
+  return ctx.originalUrl || ctx.url.toString();
 }
 
 /**
