@@ -128,9 +128,9 @@ function createMiddleware(app) {
     
     skipIf: (condition) => {
       return async (ctx, next) => {
-        if (typeof condition === 'function' ? condition(ctx) : condition) {
-          await next();
-        }
+        // Always call next() to continue the middleware chain
+        // skipIf is meant to skip middleware execution, not block the chain
+        await next();
       };
     },
     

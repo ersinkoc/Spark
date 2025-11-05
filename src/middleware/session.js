@@ -112,6 +112,7 @@ function session(options = {}) {
       rolling: opts.rolling,
       resave: opts.resave,
       saveUninitialized: opts.saveUninitialized,
+      genid: opts.genid,
       ctx: ctx
     });
 
