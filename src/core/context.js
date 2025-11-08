@@ -146,9 +146,10 @@ class Context {
    * @since 1.0.0
    */
   initializeUrl() {
-    const protocol = this.req.connection.encrypted ? 'https' : 'http';
-    const host = this.req.headers.host || 'localhost';
-    
+    // Use optional chaining to safely access connection properties
+    const protocol = this.req.connection?.encrypted ? 'https' : 'http';
+    const host = this.req.headers?.host || 'localhost';
+
     try {
       /**
        * Parsed URL object
@@ -156,7 +157,7 @@ class Context {
        * @readonly
        */
       this.url = new URL(this.req.url, `${protocol}://${host}`);
-      
+
       /**
        * Request path (pathname without query string)
        * @type {string}
@@ -171,13 +172,13 @@ class Context {
       this.body = { error: 'Invalid URL format' };
       throw new Error(`Failed to parse URL: ${error.message}`);
     }
-    
+
     /**
      * HTTP method (GET, POST, PUT, etc.)
      * @type {string}
      * @readonly
      */
-    this.method = this.req.method ? this.req.method.toUpperCase() : 'GET';
+    this.method = this.req.method?.toUpperCase() || 'GET';
     
     /**
      * Original request URL including query string
@@ -229,9 +230,21 @@ class Context {
      * ctx.query.q // 'hello'
      * ctx.query.limit // '10'
      */
-    this.query = {};
-    if (this.url.search) {
-      this.query = querystring.parse(this.url.search.slice(1));
+    // Use null-prototype object to prevent prototype pollution
+    this.query = Object.create(null);
+
+    if (this.url && this.url.search) {
+      const parsed = querystring.parse(this.url.search.slice(1));
+
+      // Filter out dangerous prototype pollution keys
+      const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+
+      for (const [key, value] of Object.entries(parsed)) {
+        // Skip dangerous keys that could cause prototype pollution
+        if (!dangerousKeys.includes(key) && !key.includes('__proto__')) {
+          this.query[key] = value;
+        }
+      }
     }
   }
 
@@ -433,6 +446,52 @@ class Context {
    * ctx.redirect('/new-path', 301);
    */
   redirect(url, status = 302) {
+    // Validate redirect URL
+    if (!url || typeof url !== 'string') {
+      throw new Error('Invalid redirect URL');
+    }
+
+    // Check for CRLF injection
+    if (/[\r\n]/.test(url)) {
+      throw new Error('Invalid redirect URL contains CRLF characters');
+    }
+
+    // Check if URL is absolute (external)
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      const allowedDomains = this.app?.settings?.allowedRedirectDomains || [];
+
+      try {
+        const urlObj = new URL(url);
+
+        // If allowed domains are configured, check the domain
+        if (allowedDomains.length > 0) {
+          const isAllowed = allowedDomains.some(domain => {
+            if (typeof domain === 'string') {
+              return urlObj.hostname === domain ||
+                     urlObj.hostname.endsWith(`.${domain}`);
+            }
+            if (domain instanceof RegExp) {
+              return domain.test(urlObj.hostname);
+            }
+            return false;
+          });
+
+          if (!isAllowed) {
+            throw new Error('Redirect to external domain not allowed');
+          }
+        }
+        // If no allowed domains configured, log a warning
+        else {
+          console.warn(`Security Warning: Redirecting to external URL ${urlObj.hostname} without domain whitelist`);
+        }
+      } catch (error) {
+        if (error.message.includes('not allowed')) {
+          throw error;
+        }
+        throw new Error(`Invalid redirect URL: ${error.message}`);
+      }
+    }
+
     this.status(status);
     this.set('Location', url);
     this.end();
@@ -708,16 +767,85 @@ class Context {
     return this.get('x-requested-with') === 'XMLHttpRequest';
   }
 
-  ip() {
-    return this.get('x-forwarded-for') || 
-           this.get('x-real-ip') || 
-           this.req.connection.remoteAddress ||
-           this.req.socket.remoteAddress;
+  /**
+   * Validate if a string is a valid IP address (IPv4 or IPv6)
+   * @param {string} ip - IP address to validate
+   * @returns {boolean} True if valid IP address
+   * @private
+   */
+  _isValidIP(ip) {
+    if (!ip || typeof ip !== 'string') return false;
+
+    // Basic IPv4 validation
+    const ipv4 = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (ipv4.test(ip)) {
+      const octets = ip.split('.');
+      return octets.every(o => {
+        const num = parseInt(o, 10);
+        return num >= 0 && num <= 255;
+      });
+    }
+
+    // Basic IPv6 validation (simplified)
+    const ipv6 = /^([\da-fA-F]{0,4}:){2,7}[\da-fA-F]{0,4}$/;
+    return ipv6.test(ip);
   }
 
+  /**
+   * Get the client IP address
+   * WARNING: Only trust X-Forwarded-For if app.settings.trustProxy is enabled
+   * @returns {string} Client IP address
+   */
+  ip() {
+    const trustProxy = this.app?.settings?.trustProxy || false;
+
+    // Only use forwarded headers if proxy trust is enabled
+    if (trustProxy) {
+      const forwarded = this.get('x-forwarded-for');
+      if (forwarded) {
+        // X-Forwarded-For contains client IP as first entry
+        const ips = forwarded.split(/\s*,\s*/);
+        const clientIP = ips[0]?.trim();
+        if (clientIP && this._isValidIP(clientIP)) {
+          return clientIP;
+        }
+      }
+
+      const realIP = this.get('x-real-ip');
+      if (realIP && this._isValidIP(realIP)) {
+        return realIP;
+      }
+    }
+
+    // Fall back to connection IP
+    return this.req.connection?.remoteAddress ||
+           this.req.socket?.remoteAddress ||
+           '0.0.0.0';
+  }
+
+  /**
+   * Get all IPs in the X-Forwarded-For chain
+   * WARNING: Only trust X-Forwarded-For if app.settings.trustProxy is enabled
+   * @returns {string[]} Array of IP addresses
+   */
   ips() {
+    const trustProxy = this.app?.settings?.trustProxy || false;
+
+    if (!trustProxy) {
+      const singleIP = this.ip();
+      return singleIP !== '0.0.0.0' ? [singleIP] : [];
+    }
+
     const forwarded = this.get('x-forwarded-for');
-    return forwarded ? forwarded.split(/\s*,\s*/) : [this.ip()];
+    if (!forwarded) {
+      const singleIP = this.ip();
+      return singleIP !== '0.0.0.0' ? [singleIP] : [];
+    }
+
+    return forwarded
+      .split(/\s*,\s*/)
+      .map(ip => ip.trim())
+      .filter(ip => ip && this._isValidIP(ip));
   }
 
   protocol() {

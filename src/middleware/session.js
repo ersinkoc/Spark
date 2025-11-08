@@ -159,16 +159,17 @@ function getSessionId(ctx, opts) {
 }
 
 function createSessionProxy(session, options) {
-  const proxy = new Proxy(session, {
-    set(target, property, value) {
-      if (property === 'cookie') {
-        return true;
-      }
-      
-      target[property] = value;
-      options.modified = true;
-      
-      // Auto-save session when modified
+  let saveTimeout = null;
+  let savePromise = null;
+
+  const debouncedSave = () => {
+    // Clear any pending save timeout
+    if (saveTimeout) {
+      clearTimeout(saveTimeout);
+    }
+
+    // Debounce saves to prevent race conditions
+    saveTimeout = setTimeout(() => {
       if (options.ctx && !options.ctx.responded) {
         const sessionData = {};
         for (const key in session) {
@@ -176,17 +177,41 @@ function createSessionProxy(session, options) {
             sessionData[key] = session[key];
           }
         }
-        options.store.set(options.sessionId, sessionData, options.cookie.maxAge);
-        const signedId = signCookie(options.sessionId, options.secret);
-        options.ctx.setCookie(options.key, signedId, options.cookie);
+
+        // Store the save promise to prevent concurrent saves
+        savePromise = Promise.resolve(
+          options.store.set(options.sessionId, sessionData, options.cookie.maxAge)
+        ).then(() => {
+          const signedId = signCookie(options.sessionId, options.secret);
+          options.ctx.setCookie(options.key, signedId, options.cookie);
+          savePromise = null;
+        }).catch(err => {
+          console.error('Session save error:', err);
+          savePromise = null;
+        });
       }
-      
+    }, 10); // 10ms debounce
+  };
+
+  const proxy = new Proxy(session, {
+    set(target, property, value) {
+      if (property === 'cookie') {
+        return true;
+      }
+
+      target[property] = value;
+      options.modified = true;
+
+      // Auto-save session when modified (debounced)
+      debouncedSave();
+
       return true;
     },
-    
+
     deleteProperty(target, property) {
       delete target[property];
       options.modified = true;
+      debouncedSave();
       return true;
     }
   });
@@ -221,11 +246,22 @@ function createSessionProxy(session, options) {
       options.sessionId = options.genid();
       options.isNew = true;
       options.modified = true;
-      
+
       for (const key in session) {
         delete session[key];
       }
     },
+    enumerable: false
+  });
+
+  Object.defineProperty(proxy, 'modified', {
+    get() { return options.modified; },
+    set(value) { options.modified = value; },
+    enumerable: false
+  });
+
+  Object.defineProperty(proxy, 'destroyed', {
+    get() { return options.destroyed; },
     enumerable: false
   });
 

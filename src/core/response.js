@@ -182,8 +182,21 @@ class Response {
 
   jsonp(obj) {
     const callback = this.req.query.callback || 'callback';
+
+    // Validate callback is a valid JavaScript identifier or dotted path
+    // Allows: functionName, obj.method, namespace.obj.method, etc.
+    if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*(\.[a-zA-Z_$][a-zA-Z0-9_$]*)*$/.test(callback)) {
+      return this.status(400).json({ error: 'Invalid callback name' });
+    }
+
+    // Limit callback length to prevent abuse
+    if (callback.length > 255) {
+      return this.status(400).json({ error: 'Callback name too long' });
+    }
+
     this.type('text/javascript');
-    this.send(`${callback}(${JSON.stringify(obj)})`);
+    this.set('X-Content-Type-Options', 'nosniff');
+    this.send(`/**/ typeof ${callback} === 'function' && ${callback}(${JSON.stringify(obj)})`);
     return this;
   }
 

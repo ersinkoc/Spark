@@ -12,6 +12,60 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+/**
+ * Sanitize filename to prevent path traversal attacks
+ * @param {string} filename - Original filename
+ * @returns {string} Sanitized filename
+ */
+function sanitizeFilename(filename) {
+  if (!filename || typeof filename !== 'string') {
+    throw new Error('Invalid filename');
+  }
+
+  // Remove path separators and parent directory references
+  let sanitized = filename
+    .replace(/^.*[\\\/]/, '')  // Remove directory path
+    .replace(/\.\./g, '')       // Remove parent directory references
+    .replace(/[<>:"|?*\x00-\x1F]/g, ''); // Remove illegal characters
+
+  // Only allow safe characters
+  sanitized = sanitized.replace(/[^a-zA-Z0-9._-]/g, '_');
+
+  // Ensure filename is not empty and has reasonable length
+  if (!sanitized || sanitized.length === 0) {
+    sanitized = 'unnamed_file';
+  }
+
+  if (sanitized.length > 255) {
+    const ext = path.extname(sanitized);
+    sanitized = sanitized.substring(0, 255 - ext.length) + ext;
+  }
+
+  // Prevent hidden files and special names
+  if (sanitized.startsWith('.')) {
+    sanitized = 'file' + sanitized;
+  }
+
+  return sanitized;
+}
+
+/**
+ * Verify file path is within uploads directory
+ * @param {string} filepath - Path to verify
+ * @throws {Error} If path is outside uploads directory
+ */
+function verifyPath(filepath) {
+  const resolvedPath = path.resolve(filepath);
+  const resolvedUploadsDir = path.resolve(uploadsDir);
+
+  if (!resolvedPath.startsWith(resolvedUploadsDir + path.sep) &&
+      resolvedPath !== resolvedUploadsDir) {
+    throw new Error('Path traversal detected');
+  }
+
+  return resolvedPath;
+}
+
 // Middleware
 app.use(middleware.cors());
 app.use(middleware.bodyParser({ limit: 10 * 1024 * 1024 })); // 10MB limit
@@ -29,10 +83,13 @@ app.post('/upload', async (ctx) => {
   const uploadedFiles = [];
 
   for (const [fieldName, file] of Object.entries(ctx.files)) {
-    const filename = `${Date.now()}-${file.filename}`;
+    const safeFilename = sanitizeFilename(file.filename);
+    const filename = `${Date.now()}-${safeFilename}`;
     const filepath = path.join(uploadsDir, filename);
 
     try {
+      // Verify path is safe before writing
+      verifyPath(filepath);
       fs.writeFileSync(filepath, file.data);
       
       uploadedFiles.push({
@@ -70,10 +127,13 @@ app.post('/upload/multiple', async (ctx) => {
     const fileArray = Array.isArray(fileOrFiles) ? fileOrFiles : [fileOrFiles];
     
     for (const file of fileArray) {
-      const filename = `${Date.now()}-${Math.random().toString(36).substring(7)}-${file.filename}`;
+      const safeFilename = sanitizeFilename(file.filename);
+      const filename = `${Date.now()}-${Math.random().toString(36).substring(7)}-${safeFilename}`;
       const filepath = path.join(uploadsDir, filename);
 
       try {
+        // Verify path is safe before writing
+        verifyPath(filepath);
         fs.writeFileSync(filepath, file.data);
         
         uploadedFiles.push({
@@ -143,9 +203,21 @@ app.get('/files', async (ctx) => {
 // Delete file
 app.delete('/files/:filename', async (ctx) => {
   const { filename } = ctx.params;
-  const filepath = path.join(uploadsDir, filename);
 
   try {
+    // Sanitize filename to prevent path traversal
+    const safeFilename = sanitizeFilename(filename);
+
+    // Additional check for path traversal patterns
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      return ctx.status(400).json({ error: 'Invalid filename' });
+    }
+
+    const filepath = path.join(uploadsDir, safeFilename);
+
+    // Verify path is within uploads directory
+    verifyPath(filepath);
+
     if (!fs.existsSync(filepath)) {
       return ctx.status(404).json({ error: 'File not found' });
     }
@@ -153,6 +225,9 @@ app.delete('/files/:filename', async (ctx) => {
     fs.unlinkSync(filepath);
     ctx.json({ message: 'File deleted successfully' });
   } catch (error) {
+    if (error.message === 'Path traversal detected') {
+      return ctx.status(403).json({ error: 'Forbidden' });
+    }
     ctx.status(500).json({ error: 'Failed to delete file' });
   }
 });
@@ -160,9 +235,15 @@ app.delete('/files/:filename', async (ctx) => {
 // File info
 app.get('/files/:filename/info', async (ctx) => {
   const { filename } = ctx.params;
-  const filepath = path.join(uploadsDir, filename);
 
   try {
+    // Sanitize filename to prevent path traversal
+    const safeFilename = sanitizeFilename(filename);
+    const filepath = path.join(uploadsDir, safeFilename);
+
+    // Verify path is safe
+    verifyPath(filepath);
+
     if (!fs.existsSync(filepath)) {
       return ctx.status(404).json({ error: 'File not found' });
     }
