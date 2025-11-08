@@ -423,8 +423,14 @@ function parseMultipartData(body, boundary) {
   
   for (let i = 1; i < parts.length - 1; i++) {
     const part = parts[i];
-    const [headers, content] = part.split('\r\n\r\n');
-    
+
+    // Split only on first occurrence of \r\n\r\n to preserve data
+    const headerEndIndex = part.indexOf('\r\n\r\n');
+    if (headerEndIndex === -1) continue;
+
+    const headers = part.substring(0, headerEndIndex);
+    const content = part.substring(headerEndIndex + 4); // +4 for '\r\n\r\n'
+
     if (!headers || content === undefined) continue;
     
     const headerLines = headers.split('\r\n');

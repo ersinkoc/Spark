@@ -239,7 +239,18 @@ function parseAuthorizationHeader(auth) {
   const [scheme, credentials] = auth.split(' ');
   
   if (scheme.toLowerCase() === 'basic') {
-    const [username, password] = Buffer.from(credentials, 'base64').toString().split(':');
+    const decoded = Buffer.from(credentials, 'base64').toString();
+    const colonIndex = decoded.indexOf(':');
+
+    if (colonIndex === -1) {
+      // No password provided
+      return { scheme: 'basic', username: decoded, password: '' };
+    }
+
+    // Split only on first colon to preserve colons in password
+    const username = decoded.substring(0, colonIndex);
+    const password = decoded.substring(colonIndex + 1);
+
     return { scheme: 'basic', username, password };
   }
 

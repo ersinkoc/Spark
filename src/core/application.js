@@ -906,14 +906,10 @@ class Application extends EventEmitter {
       return;
     }
     this.shuttingDown = true;
-    
+
     try {
-      // Stop accepting new connections immediately
-      if (this.server && this.server.listening) {
-        this.server.close();
-      }
-      
       // Give ongoing requests time to complete
+      // The close() method will handle stopping new connections
       await Promise.race([
         this.close(),
         new Promise(resolve => setTimeout(resolve, 30000)) // 30 seconds max
