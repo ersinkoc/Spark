@@ -44,7 +44,7 @@ class Request {
     this.ips = this.getIPs();
     this.userAgent = this.headers['user-agent'];
     this.contentType = this.headers['content-type'];
-    this.contentLength = parseInt(this.headers['content-length']) || 0;
+    this.contentLength = parseInt(this.headers['content-length'], 10) || 0;
     this.accept = this.headers.accept;
     this.authorization = this.headers.authorization;
     this.referer = this.headers.referer || this.headers.referrer;
@@ -54,12 +54,31 @@ class Request {
   parseCookies() {
     this.cookies = {};
     const cookieHeader = this.headers.cookie;
-    
+
     if (cookieHeader) {
       cookieHeader.split(';').forEach(cookie => {
-        const [name, value] = cookie.trim().split('=');
-        if (name && value) {
-          this.cookies[name] = decodeURIComponent(value);
+        const trimmed = cookie.trim();
+        // SECURITY: Split only on first '=' to preserve cookie values containing '='
+        const eqIndex = trimmed.indexOf('=');
+
+        if (eqIndex === -1) {
+          // Cookie without value (flag cookie)
+          if (trimmed) {
+            this.cookies[trimmed] = true;
+          }
+          return;
+        }
+
+        const name = trimmed.substring(0, eqIndex);
+        const value = trimmed.substring(eqIndex + 1);
+
+        if (name && value !== undefined) {
+          try {
+            this.cookies[name] = decodeURIComponent(value);
+          } catch (error) {
+            // If decoding fails, use raw value
+            this.cookies[name] = value;
+          }
         }
       });
     }
@@ -313,8 +332,8 @@ function parseRange(size, range) {
 
   for (const part of parts) {
     const [start, end] = part.trim().split('-');
-    const startNum = parseInt(start);
-    const endNum = parseInt(end);
+    const startNum = parseInt(start, 10);
+    const endNum = parseInt(end, 10);
 
     if (isNaN(startNum) && isNaN(endNum)) {
       continue;

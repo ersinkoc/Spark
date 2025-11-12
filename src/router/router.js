@@ -581,9 +581,23 @@ class Router {
 
     const params = {};
     for (let i = 1; i < match.length; i++) {
-      const key = keys[i - 1];
+      const keyIndex = i - 1;
+
+      // SECURITY: Bounds check to prevent undefined access
+      if (keyIndex >= keys.length) {
+        console.warn(`Router match: More capture groups (${match.length - 1}) than keys (${keys.length})`);
+        break;
+      }
+
+      const key = keys[keyIndex];
       const value = match[i];
-      
+
+      // Additional safety check
+      if (!key || !key.name) {
+        console.warn(`Router match: Invalid key at index ${keyIndex}`);
+        continue;
+      }
+
       if (value !== undefined) {
         try {
           params[key.name] = decodeURIComponent(value);

@@ -2,11 +2,13 @@
 
 const MAX_PATTERN_LENGTH = 1000;
 const MAX_CAPTURE_GROUPS = 10;
+// SECURITY: Use safe patterns to detect dangerous regex (avoid ReDoS in validator itself)
+// Previous patterns like /(\w+\+)+\w+/ could themselves cause ReDoS
 const DANGEROUS_PATTERNS = [
-  /(\w+\+)+\w+/,  // Potential catastrophic backtracking
-  /(\w+\*)+\w+/,  // Potential catastrophic backtracking
-  /(a+)+b/,       // Classic ReDoS pattern
-  /(\d+)+\w/,     // Numeric ReDoS pattern
+  /\(\w\+\+\)\+/,     // Nested quantifiers with word chars: (\w+)+
+  /\(\w\+\*\)\+/,     // Nested quantifiers: (\w*)+
+  /\(a\+\)\+b/,       // Classic ReDoS pattern: (a+)+b
+  /\(\d\+\)\+/,       // Numeric nested quantifiers: (\d+)+
 ];
 
 class RegexValidator {
@@ -19,8 +21,16 @@ class RegexValidator {
     }
     
     // Count capture groups (excluding non-capturing groups like (?:...))
+    // SECURITY: Avoid lookbehind (?<!...) for older Node.js compatibility
     // Match opening parens that are not escaped and not followed by ?
-    const captureGroups = (pattern.match(/(?<!\\)\((?!\?)/g) || []).length;
+    let captureGroups = 0;
+    for (let i = 0; i < pattern.length; i++) {
+      if (pattern[i] === '(' && (i === 0 || pattern[i - 1] !== '\\')) {
+        if (i + 1 >= pattern.length || pattern[i + 1] !== '?') {
+          captureGroups++;
+        }
+      }
+    }
     if (captureGroups > MAX_CAPTURE_GROUPS) {
       return true;
     }
@@ -42,19 +52,23 @@ class RegexValidator {
   
   static sanitizePattern(pattern) {
     if (typeof pattern !== 'string') return pattern;
-    
+
     // Limit pattern length
     if (pattern.length > MAX_PATTERN_LENGTH) {
       pattern = pattern.substring(0, MAX_PATTERN_LENGTH);
     }
-    
-    // Replace potentially dangerous quantifiers
-    pattern = pattern.replace(/(\+|\*){2,}/g, '$1');
+
+    // SECURITY: Removed dangerous quantifier replacement that changes semantics
+    // The pattern /(\+|\*){2,}/g would incorrectly change '++' to '+',
+    // which alters regex meaning (++ is literal, + is quantifier)
+    // Instead, reject patterns with excessive nested quantifiers during validation
+
+    // Limit quantifier ranges to prevent ReDoS
     pattern = pattern.replace(/\{(\d+),?\}/g, (match, num) => {
-      const limit = parseInt(num);
+      const limit = parseInt(num, 10);
       return limit > 100 ? '{0,100}' : match;
     });
-    
+
     return pattern;
   }
   
@@ -97,18 +111,27 @@ class SafeRegexCache {
   
   get(pattern, flags = '') {
     const key = `${pattern}:${flags}`;
-    
+
     if (this.cache.has(key)) {
       const entry = this.cache.get(key);
       entry.lastAccess = Date.now();
       return entry.regex;
     }
-    
+
+    // SECURITY: Validate regex flags before creating RegExp
+    // Valid flags are: g (global), i (ignoreCase), m (multiline), s (dotAll), u (unicode), y (sticky)
+    const validFlags = new Set(['g', 'i', 'm', 's', 'u', 'y']);
+    for (const flag of flags) {
+      if (!validFlags.has(flag)) {
+        throw new Error(`Invalid regex flag: "${flag}". Valid flags are: g, i, m, s, u, y`);
+      }
+    }
+
     // Validate pattern before creating regex
     if (RegexValidator.isComplexPattern(pattern)) {
       pattern = RegexValidator.sanitizePattern(pattern);
     }
-    
+
     try {
       const regex = new RegExp(pattern, flags);
       

@@ -92,6 +92,7 @@ function session(options = {}) {
     const sessionId = getSessionId(ctx, opts);
     let session = null;
     let isNew = false;
+    let finalSessionId = null;
 
     if (sessionId) {
       session = await opts.store.get(sessionId);
@@ -100,10 +101,15 @@ function session(options = {}) {
     if (!session) {
       session = {};
       isNew = true;
+      // SECURITY: Always generate new session ID for new sessions (prevents session fixation)
+      finalSessionId = opts.genid();
+    } else {
+      // Session exists, use the sessionId from cookie
+      finalSessionId = sessionId;
     }
 
     ctx.session = createSessionProxy(session, {
-      sessionId: sessionId || opts.genid(),
+      sessionId: finalSessionId,
       isNew,
       store: opts.store,
       cookie: opts.cookie,
@@ -112,6 +118,7 @@ function session(options = {}) {
       rolling: opts.rolling,
       resave: opts.resave,
       saveUninitialized: opts.saveUninitialized,
+      genid: opts.genid,  // SECURITY: Pass genid for session regeneration
       ctx: ctx
     });
 
@@ -169,8 +176,18 @@ function createSessionProxy(session, options) {
     }
 
     // Debounce saves to prevent race conditions
-    saveTimeout = setTimeout(() => {
+    saveTimeout = setTimeout(async () => {
       if (options.ctx && !options.ctx.responded) {
+        // SECURITY: Wait for any in-progress save to complete before starting new one
+        if (savePromise) {
+          try {
+            await savePromise;
+          } catch (err) {
+            // Previous save failed, continue with new save
+            console.error('Previous session save failed:', err);
+          }
+        }
+
         const sessionData = {};
         for (const key in session) {
           if (session.hasOwnProperty(key)) {
@@ -188,7 +205,15 @@ function createSessionProxy(session, options) {
         }).catch(err => {
           console.error('Session save error:', err);
           savePromise = null;
+          throw err; // Re-throw to allow outer handler to catch
         });
+
+        // Await the save to ensure it completes
+        try {
+          await savePromise;
+        } catch (err) {
+          // Already logged, just prevent unhandled rejection
+        }
       }
     }, 10); // 10ms debounce
   };
@@ -390,24 +415,54 @@ function signCookie(value, secret) {
 }
 
 function unsignCookie(signedValue, secret) {
+  // SECURITY: Use constant-time validation to prevent timing attacks
+  // Avoid early returns that could create timing oracles
+
+  let isValid = true;
+  let value = '';
+  let signature = '';
+
+  // Check structure without early return
   const parts = signedValue.split('.');
   if (parts.length !== 2) {
-    throw new Error('Invalid signed cookie');
+    isValid = false;
+  } else {
+    value = parts[0];
+    signature = parts[1];
   }
-  
-  const [value, signature] = parts;
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(value)
-    .digest('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
-  
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+
+  // Always compute expected signature (constant-time behavior)
+  let expected = '';
+  try {
+    expected = crypto
+      .createHmac('sha256', secret)
+      .update(value || '')
+      .digest('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+  } catch (error) {
+    isValid = false;
+  }
+
+  // Constant-time comparison (only if lengths match)
+  if (signature.length !== expected.length) {
+    isValid = false;
+  } else {
+    try {
+      if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+        isValid = false;
+      }
+    } catch (error) {
+      isValid = false;
+    }
+  }
+
+  // Single exit point to maintain constant-time behavior
+  if (!isValid) {
     throw new Error('Cookie signature verification failed');
   }
-  
+
   return value;
 }
 

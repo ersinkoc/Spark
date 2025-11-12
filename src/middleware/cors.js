@@ -16,8 +16,8 @@ function cors(options = {}) {
   };
 
   return async (ctx, next) => {
-    const origin = getOrigin(ctx, opts.origin);
-    
+    const origin = getOrigin(ctx, opts);
+
     if (origin) {
       ctx.set('Access-Control-Allow-Origin', origin);
     }
@@ -38,18 +38,33 @@ function cors(options = {}) {
   };
 }
 
-function getOrigin(ctx, origin) {
+function getOrigin(ctx, opts) {
+  const origin = opts.origin;
+
   if (origin === false) {
     return null;  // CORS disabled
   }
 
   if (origin === '*') {
+    // SECURITY: Wildcard origin cannot be used with credentials
+    if (opts.credentials) {
+      throw new Error('CORS origin "*" cannot be used with credentials enabled. Use a whitelist instead.');
+    }
     return '*';
   }
 
   if (origin === true) {
-    // Reflect the request origin
-    return ctx.get('origin') || '*';
+    // SECURITY: Reflecting all origins is extremely dangerous with credentials
+    if (opts.credentials) {
+      throw new Error('CORS origin "true" (reflect all) cannot be used with credentials enabled. Use a whitelist instead.');
+    }
+
+    // Log security warning even when credentials are disabled
+    console.warn('[SECURITY WARNING] CORS origin: true reflects all origins. ' +
+                 'This should only be used for public APIs. Use a whitelist array or function for better security.');
+
+    const requestOrigin = ctx.get('origin');
+    return requestOrigin || '*';
   }
 
   if (typeof origin === 'string') {

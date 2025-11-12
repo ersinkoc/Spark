@@ -271,12 +271,27 @@ class Context {
     const cookieHeader = this.req.headers.cookie;
     if (cookieHeader) {
       cookieHeader.split(';').forEach(cookie => {
-        const [name, value] = cookie.trim().split('=');
-        if (name && value) {
+        const trimmed = cookie.trim();
+        // SECURITY: Split only on first '=' to preserve cookie values containing '='
+        const eqIndex = trimmed.indexOf('=');
+
+        if (eqIndex === -1) {
+          // Cookie without value (flag cookie)
+          if (trimmed) {
+            this.cookies[trimmed] = true;
+          }
+          return;
+        }
+
+        const name = trimmed.substring(0, eqIndex);
+        const value = trimmed.substring(eqIndex + 1);
+
+        if (name && value !== undefined) {
           try {
             this.cookies[name] = decodeURIComponent(value);
           } catch (error) {
-            // Skip malformed cookie values
+            // If decoding fails, use raw value (might be unencoded)
+            this.cookies[name] = value;
             console.error(`Failed to decode cookie ${name}: ${error.message}`);
           }
         }
@@ -418,7 +433,7 @@ class Context {
    */
   status(code) {
     // Validate status code
-    const statusCode = parseInt(code);
+    const statusCode = parseInt(code, 10);
     if (isNaN(statusCode) || statusCode < 100 || statusCode > 599) {
       throw new Error(`Invalid status code: ${code}. Must be between 100 and 599`);
     }
@@ -659,11 +674,21 @@ class Context {
     let cookieString = `${name}=${encodeURIComponent(value)}`;
 
     if (options.domain) {
-      cookieString += `; Domain=${options.domain}`;
+      // SECURITY: Validate domain to prevent CRLF injection
+      const domain = String(options.domain);
+      if (/[\r\n]/.test(domain)) {
+        throw new Error('Cookie domain cannot contain CRLF characters');
+      }
+      cookieString += `; Domain=${domain}`;
     }
 
     if (options.path) {
-      cookieString += `; Path=${options.path}`;
+      // SECURITY: Validate path to prevent CRLF injection
+      const path = String(options.path);
+      if (/[\r\n]/.test(path)) {
+        throw new Error('Cookie path cannot contain CRLF characters');
+      }
+      cookieString += `; Path=${path}`;
     }
 
     if (options.expires) {
@@ -863,7 +888,7 @@ class Context {
   port() {
     const host = this.host();
     const portMatch = host.match(/:(\d+)$/);
-    return portMatch ? parseInt(portMatch[1]) : (this.secure() ? 443 : 80);
+    return portMatch ? parseInt(portMatch[1], 10) : (this.secure() ? 443 : 80);
   }
 
   subdomains() {
@@ -887,7 +912,7 @@ class Context {
 
   length() {
     const contentLength = this.get('content-length');
-    return contentLength ? parseInt(contentLength) : 0;
+    return contentLength ? parseInt(contentLength, 10) : 0;
   }
 
   toString() {

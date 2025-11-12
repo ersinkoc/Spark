@@ -75,17 +75,31 @@ class Layer {
 
   match(path) {
     const match = this.regexp.regexp.exec(path);
-    
+
     if (!match) {
       return false;
     }
 
     const params = {};
-    
+
     for (let i = 1; i < match.length; i++) {
-      const key = this.keys[i - 1];
+      const keyIndex = i - 1;
+
+      // SECURITY: Bounds check to prevent undefined access
+      if (keyIndex >= this.keys.length) {
+        console.warn(`Layer match: More capture groups (${match.length - 1}) than keys (${this.keys.length})`);
+        break;
+      }
+
+      const key = this.keys[keyIndex];
       const value = match[i];
-      
+
+      // Additional safety check
+      if (!key || !key.name) {
+        console.warn(`Layer match: Invalid key at index ${keyIndex}`);
+        continue;
+      }
+
       if (value !== undefined) {
         params[key.name] = decodeParam(value);
       }

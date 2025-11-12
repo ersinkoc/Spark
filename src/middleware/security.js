@@ -203,26 +203,46 @@ function generateSecret() {
 }
 
 function generateToken(secret) {
-  const salt = crypto.randomBytes(8).toString('hex');
-  const hash = crypto.createHash('sha256').update(salt + secret).digest('hex');
-  return salt + hash;
+  try {
+    const salt = crypto.randomBytes(8).toString('hex');
+    const hash = crypto.createHash('sha256').update(salt + secret).digest('hex');
+    return salt + hash;
+  } catch (error) {
+    // SECURITY: Catch crypto errors (e.g., insufficient entropy)
+    throw new Error('Failed to generate CSRF token: ' + error.message);
+  }
 }
 
 function verifyToken(token, secret) {
   if (!token || typeof token !== 'string') {
     return false;
   }
-  
+
   // Token format: 16 char salt + 64 char hash = 80 chars total
   if (token.length !== 80) {
     return false;
   }
 
-  const salt = token.slice(0, 16);
-  const hash = token.slice(16);
-  const expected = crypto.createHash('sha256').update(salt + secret).digest('hex');
-  
-  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(expected));
+  try {
+    const salt = token.slice(0, 16);
+    const hash = token.slice(16);
+    const expected = crypto.createHash('sha256').update(salt + secret).digest('hex');
+
+    // SECURITY: timingSafeEqual requires equal-length buffers
+    // Both hash and expected are 64 hex chars (32 bytes when converted)
+    const hashBuffer = Buffer.from(hash, 'hex');
+    const expectedBuffer = Buffer.from(expected, 'hex');
+
+    // Verify buffers are same length before comparison
+    if (hashBuffer.length !== expectedBuffer.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(hashBuffer, expectedBuffer);
+  } catch (error) {
+    // SECURITY: Catch any crypto errors (invalid hex, etc.)
+    return false;
+  }
 }
 
 function getSecret(ctx, opts) {
@@ -323,7 +343,7 @@ function requestSizeLimit(options = {}) {
   };
 
   return async (ctx, next) => {
-    const contentLength = parseInt(ctx.get('content-length') || '0');
+    const contentLength = parseInt(ctx.get('content-length') || '0', 10);
     
     if (contentLength > opts.limit) {
       return ctx.status(opts.statusCode).json({
