@@ -167,8 +167,23 @@ class Response {
 
   attachment(filename) {
     if (filename) {
-      this.type(path.extname(filename));
-      this.set('Content-Disposition', `attachment; filename="${filename}"`);
+      // SECURITY: Sanitize filename to prevent CRLF injection and header injection
+      const sanitizedFilename = filename
+        .replace(/[\r\n]/g, '')      // Remove CRLF characters
+        .replace(/["\\]/g, '\\$&')   // Escape quotes and backslashes
+        .replace(/[^\x20-\x7E]/g, ''); // Remove non-ASCII characters
+
+      // Validate sanitized filename is not empty and not too long
+      if (!sanitizedFilename || sanitizedFilename.length === 0) {
+        throw new Error('Invalid filename: cannot be empty after sanitization');
+      }
+
+      if (sanitizedFilename.length > 255) {
+        throw new Error('Invalid filename: too long (max 255 characters)');
+      }
+
+      this.type(path.extname(sanitizedFilename));
+      this.set('Content-Disposition', `attachment; filename="${sanitizedFilename}"`);
     } else {
       this.set('Content-Disposition', 'attachment');
     }
@@ -271,8 +286,13 @@ class Response {
       const etag = `"${stats.size}-${stats.mtime.getTime()}"`;
       this.set('ETag', etag);
 
-      if (this.req && this.req.headers && this.req.headers['if-none-match'] === etag) {
-        return this.status(304).end();
+      // SECURITY: Enhanced ETag comparison to handle weak ETags and comma-separated lists
+      if (this.req && this.req.headers && this.req.headers['if-none-match']) {
+        const ifNoneMatch = this.req.headers['if-none-match'];
+        // Handle wildcard or comma-separated ETags
+        if (ifNoneMatch === '*' || this.etagMatches(etag, ifNoneMatch)) {
+          return this.status(304).end();
+        }
       }
 
       if (options.headers) {
@@ -282,18 +302,20 @@ class Response {
       this.writeHead();
 
       const stream = fs.createReadStream(resolvedPath);
-      stream.pipe(this.res);
 
-      stream.on('end', () => {
-        this.finished = true;
-      });
-
+      // SECURITY: Attach error handler BEFORE piping to prevent unhandled stream errors
       stream.on('error', (error) => {
         console.error('Error sending file:', error);
         if (!this.headersSent) {
           this.status(500).send('Internal Server Error');
         }
       });
+
+      stream.on('end', () => {
+        this.finished = true;
+      });
+
+      stream.pipe(this.res);
 
     } catch (error) {
       console.error('Error in sendFile:', error);
@@ -349,13 +371,31 @@ class Response {
     return this;
   }
 
+  etagMatches(etag, ifNoneMatch) {
+    // SECURITY: Compare ETags safely, handling weak ETags (W/"...")
+    // Split by comma to handle multiple ETags
+    const tags = ifNoneMatch.split(',').map(tag => tag.trim());
+
+    for (const tag of tags) {
+      // Remove weak indicator for comparison if present
+      const normalizedTag = tag.replace(/^W\//, '');
+      const normalizedEtag = etag.replace(/^W\//, '');
+
+      if (normalizedTag === normalizedEtag) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   writeHead() {
     if (this.headersSent) {
       return;
     }
 
     this.res.statusCode = this.statusCode;
-    
+
     Object.keys(this.headers).forEach(name => {
       this.res.setHeader(name, this.headers[name]);
     });

@@ -53,8 +53,29 @@ class MemoryCache extends EventEmitter {
   }
 
   set(key, value, ttl) {
-    const expiresAt = Date.now() + (ttl || this.options.ttl);
-    
+    // SECURITY: Validate and sanitize TTL to prevent integer overflow and negative values
+    let effectiveTtl = ttl || this.options.ttl;
+
+    // Ensure TTL is a positive number
+    if (typeof effectiveTtl !== 'number' || effectiveTtl < 0 || !isFinite(effectiveTtl)) {
+      throw new Error('Invalid TTL: must be a positive number');
+    }
+
+    // Cap TTL at 1 year (in milliseconds) to prevent overflow
+    const MAX_TTL = 365 * 24 * 60 * 60 * 1000; // 1 year
+    if (effectiveTtl > MAX_TTL) {
+      console.warn(`TTL ${effectiveTtl}ms exceeds maximum ${MAX_TTL}ms, capping to maximum`);
+      effectiveTtl = MAX_TTL;
+    }
+
+    const now = Date.now();
+    const expiresAt = now + effectiveTtl;
+
+    // Additional safety check: ensure result is valid
+    if (expiresAt < now || expiresAt > Number.MAX_SAFE_INTEGER) {
+      throw new Error('TTL overflow: resulting expiration time is invalid');
+    }
+
     if (this.cache.has(key)) {
       this.del(key);
     }
@@ -66,8 +87,8 @@ class MemoryCache extends EventEmitter {
     const entry = {
       value,
       expires: expiresAt,
-      created: Date.now(),
-      accessed: Date.now()
+      created: now,
+      accessed: now
     };
 
     this.cache.set(key, entry);
@@ -77,7 +98,7 @@ class MemoryCache extends EventEmitter {
 
     this.scheduleExpiration(key, expiresAt);
     this.emit('set', key, value);
-    
+
     return true;
   }
 
@@ -264,15 +285,22 @@ class MemoryCache extends EventEmitter {
     if (typeof value === 'string') {
       return value.length;
     }
-    
+
     if (Buffer.isBuffer(value)) {
       return value.length;
     }
-    
+
     if (typeof value === 'object') {
-      return JSON.stringify(value).length;
+      // SECURITY: Wrap JSON.stringify in try-catch to handle circular references
+      try {
+        return JSON.stringify(value).length;
+      } catch (error) {
+        // If serialization fails (e.g., circular reference), estimate size
+        console.warn('Failed to serialize object for size calculation:', error.message);
+        return 0;
+      }
     }
-    
+
     return 0;
   }
 

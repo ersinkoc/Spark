@@ -80,7 +80,13 @@ function bodyParser(options = {}) {
     }
 
     const contentType = ctx.get('content-type') || '';
-    const contentLength = parseInt(ctx.get('content-length')) || 0;
+    const contentLength = parseInt(ctx.get('content-length'), 10) || 0;
+
+    // SECURITY: Validate Content-Length is not negative (bypass attempt)
+    if (contentLength < 0) {
+      ctx.status(400).json({ error: 'Invalid Content-Length: must be non-negative' });
+      return;
+    }
 
     if (contentLength > opts.limit) {
       ctx.status(413).json({ error: 'Request entity too large' });
@@ -248,20 +254,24 @@ async function parseMultipart(ctx, opts) {
         ctx.req.removeListener('data', onData);
         ctx.req.removeListener('end', onEnd);
         ctx.req.removeListener('error', onError);
+        // SECURITY: Destroy stream to prevent resource leaks on error
+        ctx.req.destroy();
         return reject(new Error('Request entity too large'));
       }
       chunks.push(chunk);
     };
-    
+
     const onEnd = () => {
       ctx.req.removeListener('data', onData);
       ctx.req.removeListener('error', onError);
       resolve();
     };
-    
+
     const onError = (error) => {
       ctx.req.removeListener('data', onData);
       ctx.req.removeListener('end', onEnd);
+      // SECURITY: Destroy stream to prevent resource leaks on error
+      ctx.req.destroy();
       reject(error);
     };
     
@@ -315,21 +325,25 @@ async function parseRaw(ctx, opts) {
         ctx.req.removeListener('data', onData);
         ctx.req.removeListener('end', onEnd);
         ctx.req.removeListener('error', onError);
+        // SECURITY: Destroy stream to prevent resource leaks on error
+        ctx.req.destroy();
         return reject(new Error('Request entity too large'));
       }
       chunks.push(chunk);
     };
-    
+
     const onEnd = () => {
       ctx.req.removeListener('data', onData);
       ctx.req.removeListener('error', onError);
       ctx.body = Buffer.concat(chunks);
       resolve();
     };
-    
+
     const onError = (error) => {
       ctx.req.removeListener('data', onData);
       ctx.req.removeListener('end', onEnd);
+      // SECURITY: Destroy stream to prevent resource leaks on error
+      ctx.req.destroy();
       reject(error);
     };
     
@@ -388,19 +402,43 @@ function readBody(req, opts) {
 
 /**
  * Extract boundary from multipart Content-Type header
- * 
+ *
  * @param {string} contentType - Content-Type header value
  * @returns {string|null} Boundary string or null if not found
- * 
+ *
  * @private
  * @since 1.0.0
  */
 function getBoundary(contentType) {
-  const match = contentType.match(/boundary=([^;]+)/);
-  if (!match || !match[1]) return null;
-  
-  // Remove quotes if present
-  return match[1].replace(/^["']|["']$/g, '');
+  // SECURITY: Use indexOf instead of regex to prevent ReDoS attacks
+  const boundaryIndex = contentType.indexOf('boundary=');
+  if (boundaryIndex === -1) return null;
+
+  const boundaryStart = boundaryIndex + 'boundary='.length;
+  let boundaryEnd = contentType.indexOf(';', boundaryStart);
+
+  // If no semicolon found, boundary extends to end of string
+  if (boundaryEnd === -1) {
+    boundaryEnd = contentType.length;
+  }
+
+  let boundary = contentType.substring(boundaryStart, boundaryEnd).trim();
+
+  // Remove quotes if present (single or double)
+  if (boundary.length >= 2) {
+    if ((boundary[0] === '"' && boundary[boundary.length - 1] === '"') ||
+        (boundary[0] === "'" && boundary[boundary.length - 1] === "'")) {
+      boundary = boundary.substring(1, boundary.length - 1);
+    }
+  }
+
+  // SECURITY: Validate boundary per RFC 2046 (up to 70 chars)
+  // This prevents empty or excessively long boundaries that could cause DoS
+  if (!boundary || boundary.length === 0 || boundary.length > 70) {
+    return null;
+  }
+
+  return boundary;
 }
 
 /**
@@ -416,12 +454,18 @@ function getBoundary(contentType) {
  * @since 1.0.0
  */
 function parseMultipartData(body, boundary) {
-  const fields = {};
-  const files = {};
-  
+  // Use null-prototype objects to prevent prototype pollution
+  const fields = Object.create(null);
+  const files = Object.create(null);
+
+  // Dangerous property names that should never be set
+  const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+
   const parts = body.split(`--${boundary}`);
-  
+
   for (let i = 1; i < parts.length - 1; i++) {
+    // SECURITY: Defensive bounds check to ensure part exists
+    if (!parts[i]) continue;
     const part = parts[i];
 
     // Split only on first occurrence of \r\n\r\n to preserve data
@@ -432,29 +476,43 @@ function parseMultipartData(body, boundary) {
     const content = part.substring(headerEndIndex + 4); // +4 for '\r\n\r\n'
 
     if (!headers || content === undefined) continue;
-    
+
     const headerLines = headers.split('\r\n');
-    const contentDisposition = headerLines.find(line => 
+    const contentDisposition = headerLines.find(line =>
       line.startsWith('Content-Disposition:')
     );
-    
+
     if (!contentDisposition) continue;
-    
+
     const nameMatch = contentDisposition.match(/name="([^"]+)"/);
     const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
-    
+
     if (!nameMatch) continue;
-    
+
     const name = nameMatch[1];
+
+    // SECURITY: Prevent prototype pollution attacks
+    if (!name || dangerousKeys.includes(name) || name.includes('__proto__')) {
+      console.warn(`[SECURITY] Blocked potentially malicious field name: ${name}`);
+      continue;
+    }
+
     const filename = filenameMatch ? filenameMatch[1] : null;
-    
+
     if (filename) {
-      const contentType = headerLines.find(line => 
+      const contentType = headerLines.find(line =>
         line.startsWith('Content-Type:')
       );
-      
+
+      // SECURITY: Sanitize filename to prevent path traversal and null byte injection
+      const sanitizedFilename = filename
+        .replace(/[\/\\]/g, '') // Remove path separators
+        .replace(/\.\./g, '')   // Remove parent directory references
+        .replace(/\0/g, '')     // Remove null bytes (prevents null-terminated string attacks)
+        .substring(0, 255);     // Limit length to prevent buffer overflow
+
       files[name] = {
-        filename,
+        filename: sanitizedFilename,
         contentType: contentType ? contentType.split(': ')[1] : 'application/octet-stream',
         size: Buffer.byteLength(content.slice(0, -2)),
         data: Buffer.from(content.slice(0, -2))
@@ -463,7 +521,7 @@ function parseMultipartData(body, boundary) {
       fields[name] = content.slice(0, -2);
     }
   }
-  
+
   return { fields, files };
 }
 

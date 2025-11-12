@@ -9,6 +9,24 @@ const stat = promisify(fs.stat);
 const readFile = promisify(fs.readFile);
 const readdir = promisify(fs.readdir);
 
+// SECURITY: File operation timeout to prevent hanging on slow/malicious filesystems
+const FILE_OPERATION_TIMEOUT = 5000; // 5 seconds
+
+/**
+ * Wraps a promise with a timeout to prevent indefinite hangs
+ * @param {Promise} promise - Promise to wrap
+ * @param {number} timeout - Timeout in milliseconds
+ * @returns {Promise} Promise that rejects on timeout
+ */
+function withTimeout(promise, timeout = FILE_OPERATION_TIMEOUT) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('File operation timeout')), timeout)
+    )
+  ]);
+}
+
 const DEFAULT_MAX_AGE = 0;
 const DEFAULT_INDEX = ['index.html'];
 
@@ -64,7 +82,8 @@ function staticFiles(root, options = {}) {
     }
     
     try {
-      const stats = await stat(filePath);
+      // SECURITY: Add timeout to prevent hanging on slow/malicious filesystems
+      const stats = await withTimeout(stat(filePath));
       
       if (stats.isDirectory()) {
         return await handleDirectory(ctx, filePath, opts, next);
@@ -103,9 +122,10 @@ async function handleDirectory(ctx, dirPath, opts, next) {
 
   for (const indexFile of opts.index) {
     const indexPath = path.join(dirPath, indexFile);
-    
+
     try {
-      const stats = await stat(indexPath);
+      // SECURITY: Add timeout to prevent hanging on slow/malicious filesystems
+      const stats = await withTimeout(stat(indexPath));
       if (stats.isFile()) {
         return await sendFile(ctx, indexPath, stats, opts);
       }
@@ -124,9 +144,10 @@ async function handleDirectory(ctx, dirPath, opts, next) {
 async function tryExtensions(ctx, filePath, opts, next) {
   for (const ext of opts.extensions) {
     const extPath = filePath + ext;
-    
+
     try {
-      const stats = await stat(extPath);
+      // SECURITY: Add timeout to prevent hanging on slow/malicious filesystems
+      const stats = await withTimeout(stat(extPath));
       if (stats.isFile()) {
         return await sendFile(ctx, extPath, stats, opts);
       }
@@ -180,6 +201,10 @@ async function sendFile(ctx, filePath, stats, opts) {
     return await sendRangeFile(ctx, filePath, stats, range);
   }
 
+  // SECURITY WARNING: setHeaders callback receives the actual file system path
+  // Callbacks MUST sanitize the filePath before using it in response headers
+  // to prevent information disclosure and header injection attacks.
+  // Example: path.basename(filePath) to get only the filename
   if (opts.setHeaders) {
     opts.setHeaders(ctx, filePath, stats);
   }
@@ -189,10 +214,15 @@ async function sendFile(ctx, filePath, stats, opts) {
   }
 
   try {
-    const content = await readFile(filePath);
+    // SECURITY: Add timeout to prevent hanging on slow/malicious filesystems
+    const content = await withTimeout(readFile(filePath));
     ctx.status(200).send(content);
   } catch (error) {
-    ctx.status(500).json({ error: 'Internal Server Error' });
+    if (error.message === 'File operation timeout') {
+      ctx.status(504).json({ error: 'Gateway Timeout' });
+    } else {
+      ctx.status(500).json({ error: 'Internal Server Error' });
+    }
   }
 }
 
@@ -216,6 +246,17 @@ async function sendRangeFile(ctx, filePath, stats, rangeHeader) {
     ctx.status(206);
 
     const stream = fs.createReadStream(filePath, { start, end });
+
+    // SECURITY: Attach error handler BEFORE piping to prevent unhandled stream errors
+    stream.on('error', (error) => {
+      console.error('Error streaming range file:', error);
+      if (!ctx.headersSent) {
+        ctx.status(500).json({ error: 'Internal Server Error' });
+      } else {
+        ctx.res.destroy();
+      }
+    });
+
     stream.pipe(ctx.res);
   } else {
     ctx.status(416).json({ error: 'Multiple ranges not supported' });
@@ -232,18 +273,24 @@ function parseRange(size, rangeHeader) {
 
   for (const part of parts) {
     const [start, end] = part.trim().split('-');
-    const startNum = parseInt(start);
-    const endNum = parseInt(end);
+    const startNum = parseInt(start, 10);
+    const endNum = parseInt(end, 10);
 
     if (isNaN(startNum) && isNaN(endNum)) {
       continue;
     }
 
     if (isNaN(startNum)) {
+      // Suffix range: last N bytes
       ranges.push({ start: Math.max(0, size - endNum), end: size - 1 });
     } else if (isNaN(endNum)) {
+      // Open-ended range: from start to end
       ranges.push({ start: startNum, end: size - 1 });
     } else {
+      // SECURITY: Validate that start <= end to prevent invalid ranges
+      if (startNum > endNum) {
+        continue; // Skip invalid range
+      }
       ranges.push({ start: startNum, end: Math.min(endNum, size - 1) });
     }
   }

@@ -212,18 +212,24 @@ function parseRange(range, size) {
 
   for (const part of parts) {
     const [start, end] = part.trim().split('-');
-    const startNum = parseInt(start);
-    const endNum = parseInt(end);
+    const startNum = parseInt(start, 10);
+    const endNum = parseInt(end, 10);
 
     if (isNaN(startNum) && isNaN(endNum)) {
       continue;
     }
 
     if (isNaN(startNum)) {
+      // Suffix range: last N bytes (e.g., "-500")
       ranges.push({ start: Math.max(0, size - endNum), end: size - 1 });
     } else if (isNaN(endNum)) {
+      // Open-ended range: from start to end (e.g., "100-")
       ranges.push({ start: startNum, end: size - 1 });
     } else {
+      // SECURITY: Validate that start <= end to prevent invalid ranges
+      if (startNum > endNum) {
+        continue; // Skip invalid range
+      }
       ranges.push({ start: startNum, end: Math.min(endNum, size - 1) });
     }
   }

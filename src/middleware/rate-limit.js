@@ -5,25 +5,36 @@ const DEFAULT_MAX_REQUESTS = 100;
 const DEFAULT_MESSAGE = 'Too many requests, please try again later.';
 
 class MemoryStore {
-  constructor() {
+  constructor(options = {}) {
     this.store = new Map();
     this.resetTimes = new Map();
+    // SECURITY: Limit maximum number of keys to prevent memory exhaustion
+    this.maxKeys = options.maxKeys || 10000;
+    this.lastAccessTimes = new Map(); // Track LRU
   }
 
   async incr(key, windowMs) {
     const now = Date.now();
     const resetTime = this.resetTimes.get(key) || now;
-    
+
+    // SECURITY: Enforce maximum key limit with LRU eviction
+    if (!this.store.has(key) && this.store.size >= this.maxKeys) {
+      this._evictOldest();
+    }
+
+    // Track access time for LRU
+    this.lastAccessTimes.set(key, now);
+
     if (now > resetTime) {
       this.store.set(key, 1);
       this.resetTimes.set(key, now + windowMs);
       return { totalHits: 1, resetTime: now + windowMs };
     }
-    
+
     const current = this.store.get(key) || 0;
     const newCount = current + 1;
     this.store.set(key, newCount);
-    
+
     return { totalHits: newCount, resetTime };
   }
 
@@ -37,15 +48,40 @@ class MemoryStore {
   async reset(key) {
     this.store.delete(key);
     this.resetTimes.delete(key);
+    this.lastAccessTimes.delete(key);
   }
 
   cleanup() {
+    // SECURITY NOTE: Potential race condition exists here
+    // Cleanup runs periodically and could conflict with concurrent incr() calls
+    // This is acceptable for MemoryStore as Map operations are atomic in single-threaded Node.js
+    // For distributed stores, use atomic operations or locks for production deployments
     const now = Date.now();
     for (const [key, resetTime] of this.resetTimes) {
       if (now > resetTime) {
         this.store.delete(key);
         this.resetTimes.delete(key);
+        this.lastAccessTimes.delete(key);
       }
+    }
+  }
+
+  _evictOldest() {
+    // Find and remove the least recently used entry
+    let oldestKey = null;
+    let oldestTime = Infinity;
+
+    for (const [key, time] of this.lastAccessTimes) {
+      if (time < oldestTime) {
+        oldestTime = time;
+        oldestKey = key;
+      }
+    }
+
+    if (oldestKey) {
+      this.store.delete(oldestKey);
+      this.resetTimes.delete(oldestKey);
+      this.lastAccessTimes.delete(oldestKey);
     }
   }
 }
@@ -62,7 +98,8 @@ function rateLimit(options = {}) {
     onLimitReached: options.onLimitReached,
     skipSuccessfulRequests: options.skipSuccessfulRequests || false,
     skipFailedRequests: options.skipFailedRequests || false,
-    store: options.store || new MemoryStore(),
+    // SECURITY: Pass maxKeys to MemoryStore to prevent unbounded memory growth
+    store: options.store || new MemoryStore({ maxKeys: options.maxKeys }),
     ...options
   };
 
