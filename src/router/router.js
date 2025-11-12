@@ -517,12 +517,26 @@ class Router {
 
     regexp = regexp.replace(/\\\//g, '/');
 
-    regexp = regexp.replace(/:([^(/\\]+)/g, (match, key) => {
+    // SECURITY FIX: Escape regex special characters before processing parameters
+    // This prevents route injection attacks where special regex chars in paths
+    // could match unintended routes (e.g., /admin.users matching /adminXusers)
+    // Temporarily replace : and * with placeholders to protect them
+    const PARAM_PLACEHOLDER = '\x00PARAM\x00';
+    const WILDCARD_PLACEHOLDER = '\x00WILD\x00';
+
+    regexp = regexp.replace(/:([^(/\\]+)/g, `${PARAM_PLACEHOLDER}$1`);
+    regexp = regexp.replace(/\*([^(/\\]*)/g, `${WILDCARD_PLACEHOLDER}$1`);
+
+    // Escape all regex special characters
+    regexp = regexp.replace(/([.+?^${}()|[\]\\])/g, '\\$1');
+
+    // Restore parameter and wildcard markers and convert to regex groups
+    regexp = regexp.replace(new RegExp(`${PARAM_PLACEHOLDER.replace(/\x00/g, '\\x00')}([^(/\\\\]+)`, 'g'), (match, key) => {
       keys.push({ name: key, optional: false });
       return '([^/]+)';
     });
 
-    regexp = regexp.replace(/\*([^(/\\]*)/g, (match, key) => {
+    regexp = regexp.replace(new RegExp(`${WILDCARD_PLACEHOLDER.replace(/\x00/g, '\\x00')}([^(/\\\\]*)`, 'g'), (match, key) => {
       keys.push({ name: key || 'wild', optional: false });
       return '(.*)';
     });

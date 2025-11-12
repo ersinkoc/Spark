@@ -8,8 +8,9 @@ const stat = promisify(fs.stat);
 const readFile = promisify(fs.readFile);
 
 class Response {
-  constructor(res) {
+  constructor(res, req = null) {
     this.res = res;
+    this.req = req;  // Store request reference for format() and jsonp()
     this.statusCode = 200;
     this.headers = {};
     this.locals = {};
@@ -229,13 +230,35 @@ class Response {
 
   async sendFile(filePath, options = {}) {
     try {
-      const stats = await stat(filePath);
-      
+      // SECURITY FIX: Validate file path to prevent path traversal attacks
+      // Reject paths with .. or other traversal attempts
+      if (!filePath || typeof filePath !== 'string') {
+        return this.status(400).send('Invalid file path');
+      }
+
+      // Check for path traversal attempts
+      if (filePath.includes('..') || filePath.includes('\0')) {
+        return this.status(403).send('Forbidden');
+      }
+
+      // Resolve to absolute path
+      const resolvedPath = path.resolve(filePath);
+
+      // If root directory specified, verify file is within allowed directory
+      if (options.root) {
+        const rootPath = path.resolve(options.root);
+        if (!resolvedPath.startsWith(rootPath + path.sep) && resolvedPath !== rootPath) {
+          return this.status(403).send('Forbidden');
+        }
+      }
+
+      const stats = await stat(resolvedPath);
+
       if (!stats.isFile()) {
         return this.status(404).send('File not found');
       }
 
-      const ext = path.extname(filePath);
+      const ext = path.extname(resolvedPath);
       this.type(ext);
 
       if (options.maxAge) {
@@ -248,7 +271,7 @@ class Response {
       const etag = `"${stats.size}-${stats.mtime.getTime()}"`;
       this.set('ETag', etag);
 
-      if (this.req.headers['if-none-match'] === etag) {
+      if (this.req && this.req.headers && this.req.headers['if-none-match'] === etag) {
         return this.status(304).end();
       }
 
@@ -257,20 +280,26 @@ class Response {
       }
 
       this.writeHead();
-      
-      const stream = fs.createReadStream(filePath);
+
+      const stream = fs.createReadStream(resolvedPath);
       stream.pipe(this.res);
-      
+
       stream.on('end', () => {
         this.finished = true;
       });
 
       stream.on('error', (error) => {
-        this.status(500).send('Internal Server Error');
+        console.error('Error sending file:', error);
+        if (!this.headersSent) {
+          this.status(500).send('Internal Server Error');
+        }
       });
 
     } catch (error) {
-      this.status(404).send('File not found');
+      console.error('Error in sendFile:', error);
+      if (!this.headersSent) {
+        this.status(404).send('File not found');
+      }
     }
 
     return this;
