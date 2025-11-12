@@ -115,6 +115,22 @@ function setFrameguard(ctx, options) {
     ctx.set('X-Frame-Options', options);
   } else if (typeof options === 'object') {
     if (options.action === 'allow-from') {
+      // SECURITY FIX: Validate domain to prevent header injection
+      if (!options.domain || typeof options.domain !== 'string') {
+        throw new Error('Frameguard domain must be a valid string');
+      }
+
+      // Check for CRLF injection attempts
+      if (options.domain.includes('\r') || options.domain.includes('\n')) {
+        throw new Error('Invalid domain: CRLF characters not allowed');
+      }
+
+      // Validate domain format (basic check for valid hostname)
+      const domainRegex = /^[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?)*$/i;
+      if (!domainRegex.test(options.domain) && !options.domain.startsWith('http://') && !options.domain.startsWith('https://')) {
+        throw new Error('Invalid domain format');
+      }
+
       ctx.set('X-Frame-Options', `ALLOW-FROM ${options.domain}`);
     } else {
       ctx.set('X-Frame-Options', options.action || 'DENY');

@@ -1,4 +1,23 @@
 const { Spark, Router } = require('../../src');
+const crypto = require('crypto');
+
+// SECURITY FIX: Generate random session secret if not provided (demo only)
+// 🔴 CRITICAL: In production, ALWAYS set SESSION_SECRET environment variable!
+let sessionSecret = process.env.SESSION_SECRET;
+if (!sessionSecret) {
+  if (process.env.NODE_ENV === 'production') {
+    // In production, REQUIRE the secret to be set
+    console.error('🔴 CRITICAL ERROR: SESSION_SECRET environment variable must be set in production!');
+    console.error('Generate a secure secret with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+    process.exit(1);
+  } else {
+    // In development, generate a random secret with warning
+    sessionSecret = crypto.randomBytes(32).toString('hex');
+    console.warn('⚠️  WARNING: Using randomly generated session secret for development.');
+    console.warn('⚠️  Set SESSION_SECRET environment variable for persistent sessions.');
+    console.warn(`⚠️  Generated secret (save this if you want persistent sessions):\n    ${sessionSecret}`);
+  }
+}
 
 // Create application
 const app = new Spark({
@@ -17,13 +36,13 @@ const app = new Spark({
 });
 
 // Middleware
-app.use(require('../../src/middleware/logger')({ 
-  format: ':method :url :status :response-time ms' 
+app.use(require('../../src/middleware/logger')({
+  format: ':method :url :status :response-time ms'
 }));
 app.use(require('../../src/middleware/body-parser')());
 app.use(require('../../src/middleware/compression')());
 app.use(require('../../src/middleware/session')({
-  secret: process.env.SESSION_SECRET || 'ecommerce-secret-key',
+  secret: sessionSecret,  // Use validated/generated secret
   saveUninitialized: true,
   resave: false,
   cookie: {
@@ -450,11 +469,28 @@ function generateId() {
 }
 
 function hashPassword(password) {
-  // Simple hash for demo (use bcrypt in production)
+  // ⚠️  SECURITY WARNING: This is NOT a secure password hashing method!
+  // Base64 is ENCODING, not HASHING - passwords can be trivially decoded.
+  // This is for DEMO PURPOSES ONLY to avoid adding external dependencies.
+  //
+  // 🔴 CRITICAL: NEVER use this in production!
+  // Production use requires proper password hashing:
+  //   - bcrypt (recommended): npm install bcrypt
+  //   - argon2 (also good): npm install argon2
+  //   - scrypt (built-in): require('crypto').scrypt
+  //
+  // Example with bcrypt:
+  //   const bcrypt = require('bcrypt');
+  //   return await bcrypt.hash(password, 10);
+  //
+  console.warn('⚠️  WARNING: Using insecure Base64 encoding for passwords! DO NOT use in production!');
   return Buffer.from(password).toString('base64');
 }
 
 function verifyPassword(password, hash) {
+  // ⚠️  SECURITY WARNING: Insecure verification method - see hashPassword()
+  // Production example with bcrypt:
+  //   return await bcrypt.compare(password, hash);
   return Buffer.from(password).toString('base64') === hash;
 }
 
