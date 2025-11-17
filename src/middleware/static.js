@@ -19,11 +19,16 @@ const FILE_OPERATION_TIMEOUT = 5000; // 5 seconds
  * @returns {Promise} Promise that rejects on timeout
  */
 function withTimeout(promise, timeout = FILE_OPERATION_TIMEOUT) {
+  let timeoutId;
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error('File operation timeout')), timeout);
+  });
+
+  // BUG FIX: Clear timeout when promise resolves to prevent resource leak
   return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('File operation timeout')), timeout)
-    )
+    promise.finally(() => clearTimeout(timeoutId)),
+    timeoutPromise
   ]);
 }
 
@@ -55,21 +60,33 @@ function staticFiles(root, options = {}) {
 
     let pathname;
     try {
+      // BUG FIX: Decode URL encoding to catch encoded path traversal attempts
+      // Decode twice to catch double-encoded attacks like %252e%252e
       pathname = decodeURIComponent(ctx.path);
+      // Second decode to catch double encoding
+      try {
+        const doubleDecoded = decodeURIComponent(pathname);
+        if (doubleDecoded !== pathname) {
+          pathname = doubleDecoded;
+        }
+      } catch (e) {
+        // Single decode is fine, continue
+      }
     } catch (e) {
       return ctx.status(400).json({ error: 'Invalid URL encoding' });
     }
-    
-    // Normalize the path to prevent directory traversal
-    const normalizedPath = path.normalize(pathname).replace(/^(\.\.(\/|\\|$))+/, '');
-    
-    // Ensure the path doesn't contain any traversal patterns
-    if (pathname.includes('..') || pathname.includes('\0')) {
+
+    // BUG FIX: Check for traversal patterns AFTER decoding
+    // This catches URL-encoded traversal like %2e%2e
+    if (pathname.includes('..') || pathname.includes('\0') || pathname.includes('%2e') || pathname.includes('%2E')) {
       if (opts.fallthrough) {
         return next();
       }
       return ctx.status(403).json({ error: 'Forbidden' });
     }
+
+    // Normalize the path to prevent directory traversal
+    const normalizedPath = path.normalize(pathname).replace(/^(\.\.(\/|\\|$))+/, '');
 
     const filePath = path.join(opts.root, normalizedPath);
     
@@ -334,10 +351,13 @@ function getContentType(filePath) {
 }
 
 function generateETag(stats) {
-  const hash = crypto.createHash('md5');
+  // SECURITY: Use SHA-256 instead of MD5 for cryptographic strength
+  // MD5 is vulnerable to collision attacks
+  const hash = crypto.createHash('sha256');
   hash.update(stats.size.toString());
   hash.update(stats.mtime.getTime().toString());
-  return `"${hash.digest('hex')}"`;
+  // Use first 32 chars of hex for reasonable ETag length
+  return `"${hash.digest('hex').substring(0, 32)}"`;
 }
 
 function serveStatic(root, options) {

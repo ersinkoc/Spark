@@ -432,12 +432,27 @@ class Context {
    * ctx.status(201).json({ id: 123, name: 'User' });
    */
   status(code) {
-    // Validate status code
-    const statusCode = parseInt(code, 10);
-    if (isNaN(statusCode) || statusCode < 100 || statusCode > 599) {
+    // BUG FIX: Strict type validation - reject non-integer inputs
+    // parseInt("200abc") would silently convert to 200, masking bugs
+    if (typeof code !== 'number' || !Number.isInteger(code)) {
+      // Try to parse if it's a string, but validate strictly
+      if (typeof code === 'string') {
+        // Check if the string is purely numeric
+        if (!/^\d+$/.test(code.trim())) {
+          throw new Error(`Invalid status code: ${code}. Must be an integer between 100 and 599`);
+        }
+        code = parseInt(code, 10);
+      } else {
+        throw new Error(`Invalid status code type: ${typeof code}. Must be a number`);
+      }
+    }
+
+    // Validate status code range
+    if (code < 100 || code > 599) {
       throw new Error(`Invalid status code: ${code}. Must be between 100 and 599`);
     }
-    this.statusCode = statusCode;
+
+    this.statusCode = code;
     return this;
   }
 
@@ -471,14 +486,22 @@ class Context {
       throw new Error('Invalid redirect URL contains CRLF characters');
     }
 
+    // SECURITY: Validate protocol to prevent XSS via javascript:, data:, etc.
+    const dangerousProtocols = ['javascript:', 'data:', 'vbscript:', 'file:', 'about:'];
+    const lowerUrl = url.toLowerCase();
+    if (dangerousProtocols.some(proto => lowerUrl.startsWith(proto))) {
+      throw new Error(`Redirect to ${lowerUrl.split(':')[0]}: protocol is not allowed`);
+    }
+
     // Check if URL is absolute (external)
     if (url.startsWith('http://') || url.startsWith('https://')) {
       const allowedDomains = this.app?.settings?.allowedRedirectDomains || [];
+      const allowOpenRedirects = this.app?.settings?.allowOpenRedirects === true;
 
       try {
         const urlObj = new URL(url);
 
-        // If allowed domains are configured, check the domain
+        // SECURITY: If allowed domains are configured, check the domain
         if (allowedDomains.length > 0) {
           const isAllowed = allowedDomains.some(domain => {
             if (typeof domain === 'string') {
@@ -495,12 +518,16 @@ class Context {
             throw new Error('Redirect to external domain not allowed');
           }
         }
-        // If no allowed domains configured, log a warning
+        // SECURITY: If no whitelist and open redirects not explicitly allowed, reject
+        else if (!allowOpenRedirects) {
+          throw new Error('External redirects require allowedRedirectDomains configuration or allowOpenRedirects: true');
+        }
+        // Open redirects explicitly allowed - log warning
         else {
-          console.warn(`Security Warning: Redirecting to external URL ${urlObj.hostname} without domain whitelist`);
+          console.warn(`[SECURITY] Open redirect to ${urlObj.hostname} (allowOpenRedirects is enabled)`);
         }
       } catch (error) {
-        if (error.message.includes('not allowed')) {
+        if (error.message.includes('not allowed') || error.message.includes('require')) {
           throw error;
         }
         throw new Error(`Invalid redirect URL: ${error.message}`);
@@ -649,24 +676,35 @@ class Context {
     if (!name || typeof name !== 'string') {
       throw new Error('Cookie name must be a non-empty string');
     }
-    
+
+    // SECURITY: Validate cookie name length (RFC 6265 recommends max 4096 bytes total)
+    if (name.length > 256) {
+      throw new Error(`Cookie name too long: ${name.length} bytes (max 256)`);
+    }
+
     // Validate cookie name format (RFC 6265)
     if (!/^[!#$%&'*+\-.0-9A-Z^_`a-z|~]+$/.test(name)) {
       throw new Error(`Invalid cookie name: ${name}`);
     }
-    
+
     // Check for control characters in cookie name
     if (/[\x00-\x1F\x7F]/.test(name)) {
       throw new Error('Cookie name cannot contain control characters');
     }
-    
+
     // Validate cookie value
     if (value === null || value === undefined) {
       value = '';
     }
-    
+
     // Convert value to string and check for invalid characters
     const stringValue = String(value);
+
+    // SECURITY: Validate cookie value length
+    if (stringValue.length > 4096) {
+      throw new Error(`Cookie value too long: ${stringValue.length} bytes (max 4096)`);
+    }
+
     if (/[\x00-\x1F\x7F]/.test(stringValue)) {
       throw new Error('Cookie value cannot contain control characters');
     }
@@ -707,9 +745,16 @@ class Context {
       cookieString += '; Secure';
     }
 
-    if (options.sameSite) {
+    if (options.sameSite !== undefined) {
+      // BUG FIX: Handle empty string and validate length before charAt
+      const sameSiteStr = String(options.sameSite);
+      if (!sameSiteStr || sameSiteStr.length === 0) {
+        throw new Error('SameSite value cannot be empty');
+      }
+
       const validSameSite = ['Strict', 'Lax', 'None'];
-      const sameSiteValue = options.sameSite.charAt(0).toUpperCase() + options.sameSite.slice(1).toLowerCase();
+      const sameSiteValue = sameSiteStr.charAt(0).toUpperCase() + sameSiteStr.slice(1).toLowerCase();
+
       if (!validSameSite.includes(sameSiteValue)) {
         throw new Error(`Invalid SameSite value: ${options.sameSite}. Must be 'Strict', 'Lax', or 'None'`);
       }

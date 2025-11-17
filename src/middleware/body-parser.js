@@ -8,6 +8,7 @@
  */
 
 const querystring = require('querystring');
+const { safeJSONParse } = require('../utils/safe-json');
 const { Readable } = require('stream');
 
 /** @constant {number} Default size limit for request bodies (1MB) */
@@ -213,9 +214,10 @@ function shouldParseRaw(contentType, type) {
  */
 async function parseJson(ctx, opts) {
   const body = await readBody(ctx.req, opts);
-  
+
   try {
-    ctx.body = JSON.parse(body);
+    // SECURITY: Use safe JSON parser with depth and size limits
+    ctx.body = safeJSONParse(body, { maxDepth: 20, maxSize: opts.limit });
   } catch (error) {
     throw new Error(`Invalid JSON: ${error.message}`);
   }

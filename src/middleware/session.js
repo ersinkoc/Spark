@@ -168,6 +168,7 @@ function getSessionId(ctx, opts) {
 function createSessionProxy(session, options) {
   let saveTimeout = null;
   let savePromise = null;
+  let isSaving = false; // BUG FIX: Add mutex flag to prevent concurrent saves
 
   const debouncedSave = () => {
     // Clear any pending save timeout
@@ -177,42 +178,54 @@ function createSessionProxy(session, options) {
 
     // Debounce saves to prevent race conditions
     saveTimeout = setTimeout(async () => {
+      // BUG FIX: Skip if already saving to prevent race conditions
+      if (isSaving) {
+        // Reschedule if another save is in progress
+        saveTimeout = setTimeout(() => debouncedSave(), 10);
+        return;
+      }
+
       if (options.ctx && !options.ctx.responded) {
-        // SECURITY: Wait for any in-progress save to complete before starting new one
-        if (savePromise) {
-          try {
-            await savePromise;
-          } catch (err) {
-            // Previous save failed, continue with new save
-            console.error('Previous session save failed:', err);
-          }
-        }
+        isSaving = true; // Set mutex
 
-        const sessionData = {};
-        for (const key in session) {
-          if (session.hasOwnProperty(key)) {
-            sessionData[key] = session[key];
-          }
-        }
-
-        // Store the save promise to prevent concurrent saves
-        savePromise = Promise.resolve(
-          options.store.set(options.sessionId, sessionData, options.cookie.maxAge)
-        ).then(() => {
-          const signedId = signCookie(options.sessionId, options.secret);
-          options.ctx.setCookie(options.key, signedId, options.cookie);
-          savePromise = null;
-        }).catch(err => {
-          console.error('Session save error:', err);
-          savePromise = null;
-          throw err; // Re-throw to allow outer handler to catch
-        });
-
-        // Await the save to ensure it completes
         try {
+          // SECURITY: Wait for any in-progress save to complete before starting new one
+          if (savePromise) {
+            try {
+              await savePromise;
+            } catch (err) {
+              // Previous save failed, continue with new save
+              console.error('Previous session save failed:', err);
+            }
+          }
+
+          // BUG FIX: Take snapshot inside try block to ensure consistent state
+          const sessionData = {};
+          for (const key in session) {
+            if (session.hasOwnProperty(key)) {
+              sessionData[key] = session[key];
+            }
+          }
+
+          // Store the save promise to prevent concurrent saves
+          savePromise = Promise.resolve(
+            options.store.set(options.sessionId, sessionData, options.cookie.maxAge)
+          ).then(() => {
+            const signedId = signCookie(options.sessionId, options.secret);
+            options.ctx.setCookie(options.key, signedId, options.cookie);
+            savePromise = null;
+          }).catch(err => {
+            console.error('Session save error:', err);
+            savePromise = null;
+            throw err; // Re-throw to allow outer handler to catch
+          });
+
+          // Await the save to ensure it completes
           await savePromise;
         } catch (err) {
-          // Already logged, just prevent unhandled rejection
+          // Error already logged
+        } finally {
+          isSaving = false; // Always release mutex
         }
       }
     }, 10); // 10ms debounce

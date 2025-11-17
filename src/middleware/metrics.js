@@ -125,17 +125,21 @@ class MetricsCollector {
   getMetrics() {
     const now = Date.now();
     const uptime = now - this.startTime;
-    
-    const avgResponseTime = this.metrics.responseTime.count > 0 
-      ? this.metrics.responseTime.total / this.metrics.responseTime.count 
+
+    const avgResponseTime = this.metrics.responseTime.count > 0
+      ? this.metrics.responseTime.total / this.metrics.responseTime.count
       : 0;
+
+    // SECURITY: Prevent division by zero when uptime is 0 (immediately after startup)
+    const uptimeSeconds = uptime / 1000;
+    const rps = uptimeSeconds > 0 ? this.metrics.requests.total / uptimeSeconds : 0;
 
     return {
       timestamp: now,
       uptime: uptime,
       requests: {
         ...this.metrics.requests,
-        rps: this.metrics.requests.total / (uptime / 1000) // requests per second
+        rps: rps // requests per second (safe from division by zero)
       },
       responseTime: {
         ...this.metrics.responseTime,

@@ -247,17 +247,28 @@ class Application extends EventEmitter {
    */
   setupShutdownHandlers() {
     // Graceful shutdown on SIGTERM and SIGINT
+    // BUG FIX: Store signal handler references for cleanup
+    this._signalHandlers = new Map();
+
     const shutdownHandler = (signal) => {
       // Console.log removed for production
       this.gracefulShutdown();
     };
-    
-    process.once('SIGTERM', () => shutdownHandler('SIGTERM'));
-    process.once('SIGINT', () => shutdownHandler('SIGINT'));
-    
+
+    const sigtermHandler = () => shutdownHandler('SIGTERM');
+    const sigintHandler = () => shutdownHandler('SIGINT');
+
+    this._signalHandlers.set('SIGTERM', sigtermHandler);
+    this._signalHandlers.set('SIGINT', sigintHandler);
+
+    process.once('SIGTERM', sigtermHandler);
+    process.once('SIGINT', sigintHandler);
+
     // Windows-specific shutdown handling
     if (process.platform === 'win32') {
-      process.once('SIGBREAK', () => shutdownHandler('SIGBREAK'));
+      const sigbreakHandler = () => shutdownHandler('SIGBREAK');
+      this._signalHandlers.set('SIGBREAK', sigbreakHandler);
+      process.once('SIGBREAK', sigbreakHandler);
     }
   }
 
@@ -612,27 +623,38 @@ class Application extends EventEmitter {
       try {
         // Get status code from error or default to 500
         const statusCode = error.status || error.statusCode || 500;
-        
+
+        // SECURITY: Sanitize error messages to prevent information disclosure
+        const isDevelopment = process.env.NODE_ENV === 'development';
+
         // Prepare error response
         const errorResponse = {
-          error: error.message || 'Internal Server Error',
           status: statusCode
         };
-        
-        // Add additional error properties if they exist
-        if (error.code) {
+
+        // SECURITY: Only expose error message for client errors (4xx) or in development
+        if (statusCode < 500 || isDevelopment) {
+          errorResponse.error = error.message || 'Internal Server Error';
+        } else {
+          // In production, use generic message for server errors to prevent info leakage
+          errorResponse.error = 'Internal Server Error';
+        }
+
+        // SECURITY: Only add error code if it's safe to expose
+        if (error.code && (statusCode < 500 || isDevelopment)) {
           errorResponse.code = error.code;
         }
-        
-        if (error.details) {
+
+        // SECURITY: Never expose error.details in production for 5xx errors
+        if (error.details && (statusCode < 500 || isDevelopment)) {
           errorResponse.details = error.details;
         }
-        
-        // Add stack trace in development
-        if (process.env.NODE_ENV === 'development') {
+
+        // SECURITY: Only add stack trace in development mode with explicit flag
+        if (isDevelopment && process.env.EXPOSE_STACK_TRACES !== 'false') {
           errorResponse.stack = error.stack;
         }
-        
+
         ctx.status(statusCode).json(errorResponse);
       } catch (responseError) {
         console.error('Error sending error response:', responseError);
@@ -821,6 +843,14 @@ class Application extends EventEmitter {
   async close() {
     if (!this.server) {
       return;
+    }
+
+    // BUG FIX: Remove signal handlers to prevent memory leaks
+    if (this._signalHandlers) {
+      for (const [signal, handler] of this._signalHandlers) {
+        process.removeListener(signal, handler);
+      }
+      this._signalHandlers.clear();
     }
 
     // Run all cleanup handlers

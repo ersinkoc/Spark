@@ -308,26 +308,59 @@ function isValidMethod(method) {
 
 function parseQuery(queryString) {
   if (!queryString) {
-    return {};
+    return Object.create(null);
   }
 
-  const params = {};
+  // SECURITY: Limit query string size to prevent DoS attacks
+  const MAX_QUERY_SIZE = 1024 * 1024; // 1MB max
+  if (queryString.length > MAX_QUERY_SIZE) {
+    throw new Error(`Query string too large: ${queryString.length} bytes exceeds maximum ${MAX_QUERY_SIZE} bytes`);
+  }
+
+  // SECURITY: Use null-prototype object to prevent prototype pollution
+  const params = Object.create(null);
+
+  // SECURITY: Dangerous property names that should never be set
+  const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+
   const pairs = queryString.split('&');
 
   for (const pair of pairs) {
-    const [key, value] = pair.split('=');
+    const eqIndex = pair.indexOf('=');
+    let key, value;
+
+    if (eqIndex === -1) {
+      key = pair;
+      value = '';
+    } else {
+      key = pair.substring(0, eqIndex);
+      value = pair.substring(eqIndex + 1);
+    }
+
     if (key) {
-      const decodedKey = decodeURIComponent(key);
-      const decodedValue = value ? decodeURIComponent(value) : '';
-      
-      if (params[decodedKey]) {
-        if (Array.isArray(params[decodedKey])) {
-          params[decodedKey].push(decodedValue);
-        } else {
-          params[decodedKey] = [params[decodedKey], decodedValue];
+      try {
+        const decodedKey = decodeURIComponent(key);
+        const decodedValue = value ? decodeURIComponent(value) : '';
+
+        // SECURITY: Prevent prototype pollution attacks
+        if (dangerousKeys.includes(decodedKey) || decodedKey.includes('__proto__')) {
+          console.warn(`[SECURITY] Blocked potentially malicious query parameter: ${decodedKey}`);
+          continue;
         }
-      } else {
-        params[decodedKey] = decodedValue;
+
+        if (params[decodedKey]) {
+          if (Array.isArray(params[decodedKey])) {
+            params[decodedKey].push(decodedValue);
+          } else {
+            params[decodedKey] = [params[decodedKey], decodedValue];
+          }
+        } else {
+          params[decodedKey] = decodedValue;
+        }
+      } catch (error) {
+        // Malformed URI component - skip this parameter
+        console.warn(`[SECURITY] Failed to decode query parameter: ${error.message}`);
+        continue;
       }
     }
   }
