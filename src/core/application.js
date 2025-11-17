@@ -623,27 +623,38 @@ class Application extends EventEmitter {
       try {
         // Get status code from error or default to 500
         const statusCode = error.status || error.statusCode || 500;
-        
+
+        // SECURITY: Sanitize error messages to prevent information disclosure
+        const isDevelopment = process.env.NODE_ENV === 'development';
+
         // Prepare error response
         const errorResponse = {
-          error: error.message || 'Internal Server Error',
           status: statusCode
         };
-        
-        // Add additional error properties if they exist
-        if (error.code) {
+
+        // SECURITY: Only expose error message for client errors (4xx) or in development
+        if (statusCode < 500 || isDevelopment) {
+          errorResponse.error = error.message || 'Internal Server Error';
+        } else {
+          // In production, use generic message for server errors to prevent info leakage
+          errorResponse.error = 'Internal Server Error';
+        }
+
+        // SECURITY: Only add error code if it's safe to expose
+        if (error.code && (statusCode < 500 || isDevelopment)) {
           errorResponse.code = error.code;
         }
-        
-        if (error.details) {
+
+        // SECURITY: Never expose error.details in production for 5xx errors
+        if (error.details && (statusCode < 500 || isDevelopment)) {
           errorResponse.details = error.details;
         }
-        
-        // Add stack trace in development
-        if (process.env.NODE_ENV === 'development') {
+
+        // SECURITY: Only add stack trace in development mode with explicit flag
+        if (isDevelopment && process.env.EXPOSE_STACK_TRACES !== 'false') {
           errorResponse.stack = error.stack;
         }
-        
+
         ctx.status(statusCode).json(errorResponse);
       } catch (responseError) {
         console.error('Error sending error response:', responseError);
