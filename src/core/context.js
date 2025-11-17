@@ -745,7 +745,7 @@ class Context {
       cookieString += '; Secure';
     }
 
-    if (options.sameSite) {
+    if (options.sameSite !== undefined) {
       // BUG FIX: Handle empty string and validate length before charAt
       const sameSiteStr = String(options.sameSite);
       if (!sameSiteStr || sameSiteStr.length === 0) {
