@@ -41,7 +41,6 @@ function cache(options = {}) {
     if (cached && cached.expires > Date.now()) {
       // Serve from cache
       ctx.status(cached.status);
-      ctx.body = cached.body;
 
       // Set cached headers individually
       for (const [name, value] of Object.entries(cached.headers)) {
@@ -50,6 +49,13 @@ function cache(options = {}) {
 
       ctx.set('X-Cache', 'HIT');
       ctx.set('Age', Math.floor((Date.now() - cached.created) / 1000));
+
+      // BUG FIX: Actually send the cached response (was just setting ctx.body without sending)
+      if (typeof cached.body === 'string' || Buffer.isBuffer(cached.body)) {
+        ctx.send(cached.body);
+      } else {
+        ctx.json(cached.body);
+      }
       return;
     }
 

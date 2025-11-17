@@ -316,8 +316,16 @@ function tokenBucket(options = {}) {
     
     // Prevent unlimited growth
     if (!buckets.has(key) && buckets.size >= opts.maxBuckets) {
-      // Remove oldest bucket
-      const oldestKey = lastActivity.entries().next().value?.[0];
+      // SECURITY: Remove least recently used bucket (LRU eviction)
+      // Find the entry with the smallest timestamp (oldest access time)
+      let oldestKey = null;
+      let oldestTime = Infinity;
+      for (const [k, timestamp] of lastActivity) {
+        if (timestamp < oldestTime) {
+          oldestTime = timestamp;
+          oldestKey = k;
+        }
+      }
       if (oldestKey) {
         buckets.delete(oldestKey);
         lastActivity.delete(oldestKey);

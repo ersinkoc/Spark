@@ -2,6 +2,7 @@
 
 const { URL } = require('url');
 const querystring = require('querystring');
+const { safeJSONParse } = require('../utils/safe-json');
 
 class Request {
   constructor(req) {
@@ -261,7 +262,8 @@ class Request {
         this.rawBody = body;
         try {
           if (this.is('json')) {
-            this.body = JSON.parse(body);
+            // SECURITY: Use safe JSON parser with depth and size limits
+            this.body = safeJSONParse(body, { maxDepth: 20, maxSize: 10 * 1024 * 1024 });
           } else if (this.is('form')) {
             this.body = querystring.parse(body);
           } else {

@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const bodyParser = require('../middleware/body-parser');
 const cors = require('../middleware/cors');
 const compression = require('../middleware/compression');
@@ -42,8 +43,27 @@ function createMiddleware(app) {
         
         const credentials = Buffer.from(auth.slice(6), 'base64').toString();
         const [username, password] = credentials.split(':');
-        
-        if (options.users && options.users[username] === password) {
+
+        // SECURITY: Use timing-safe comparison to prevent timing attacks
+        let authenticated = false;
+
+        if (options.users && options.users[username]) {
+          const expectedPassword = options.users[username];
+          try {
+            // Pad passwords to same length for timing-safe comparison
+            const maxLen = Math.max(password.length, expectedPassword.length);
+            const passwordBuf = Buffer.from(password.padEnd(maxLen, '\0'));
+            const expectedBuf = Buffer.from(expectedPassword.padEnd(maxLen, '\0'));
+
+            authenticated = crypto.timingSafeEqual(passwordBuf, expectedBuf) &&
+                          password.length === expectedPassword.length;
+          } catch (err) {
+            // Length mismatch or other error - not authenticated
+            authenticated = false;
+          }
+        }
+
+        if (authenticated) {
           ctx.user = { username };
           await next();
         } else if (options.verify && await options.verify(username, password)) {
@@ -155,10 +175,11 @@ function createMiddleware(app) {
         
         if (ctx.method === 'GET' && ctx.statusCode === 200) {
           const body = ctx.res._getData ? ctx.res._getData() : '';
-          const etag = crypto.createHash('md5').update(body).digest('hex');
-          
+          // SECURITY: Use SHA-256 instead of MD5 for cryptographic strength
+          const etag = crypto.createHash('sha256').update(body).digest('hex').substring(0, 32);
+
           ctx.set('ETag', `"${etag}"`);
-          
+
           if (ctx.get('if-none-match') === `"${etag}"`) {
             ctx.status(304).end();
           }

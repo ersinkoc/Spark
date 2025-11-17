@@ -19,11 +19,16 @@ const FILE_OPERATION_TIMEOUT = 5000; // 5 seconds
  * @returns {Promise} Promise that rejects on timeout
  */
 function withTimeout(promise, timeout = FILE_OPERATION_TIMEOUT) {
+  let timeoutId;
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error('File operation timeout')), timeout);
+  });
+
+  // BUG FIX: Clear timeout when promise resolves to prevent resource leak
   return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('File operation timeout')), timeout)
-    )
+    promise.finally(() => clearTimeout(timeoutId)),
+    timeoutPromise
   ]);
 }
 
@@ -334,10 +339,13 @@ function getContentType(filePath) {
 }
 
 function generateETag(stats) {
-  const hash = crypto.createHash('md5');
+  // SECURITY: Use SHA-256 instead of MD5 for cryptographic strength
+  // MD5 is vulnerable to collision attacks
+  const hash = crypto.createHash('sha256');
   hash.update(stats.size.toString());
   hash.update(stats.mtime.getTime().toString());
-  return `"${hash.digest('hex')}"`;
+  // Use first 32 chars of hex for reasonable ETag length
+  return `"${hash.digest('hex').substring(0, 32)}"`;
 }
 
 function serveStatic(root, options) {
