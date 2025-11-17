@@ -247,17 +247,28 @@ class Application extends EventEmitter {
    */
   setupShutdownHandlers() {
     // Graceful shutdown on SIGTERM and SIGINT
+    // BUG FIX: Store signal handler references for cleanup
+    this._signalHandlers = new Map();
+
     const shutdownHandler = (signal) => {
       // Console.log removed for production
       this.gracefulShutdown();
     };
-    
-    process.once('SIGTERM', () => shutdownHandler('SIGTERM'));
-    process.once('SIGINT', () => shutdownHandler('SIGINT'));
-    
+
+    const sigtermHandler = () => shutdownHandler('SIGTERM');
+    const sigintHandler = () => shutdownHandler('SIGINT');
+
+    this._signalHandlers.set('SIGTERM', sigtermHandler);
+    this._signalHandlers.set('SIGINT', sigintHandler);
+
+    process.once('SIGTERM', sigtermHandler);
+    process.once('SIGINT', sigintHandler);
+
     // Windows-specific shutdown handling
     if (process.platform === 'win32') {
-      process.once('SIGBREAK', () => shutdownHandler('SIGBREAK'));
+      const sigbreakHandler = () => shutdownHandler('SIGBREAK');
+      this._signalHandlers.set('SIGBREAK', sigbreakHandler);
+      process.once('SIGBREAK', sigbreakHandler);
     }
   }
 
@@ -821,6 +832,14 @@ class Application extends EventEmitter {
   async close() {
     if (!this.server) {
       return;
+    }
+
+    // BUG FIX: Remove signal handlers to prevent memory leaks
+    if (this._signalHandlers) {
+      for (const [signal, handler] of this._signalHandlers) {
+        process.removeListener(signal, handler);
+      }
+      this._signalHandlers.clear();
     }
 
     // Run all cleanup handlers

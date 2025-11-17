@@ -432,12 +432,27 @@ class Context {
    * ctx.status(201).json({ id: 123, name: 'User' });
    */
   status(code) {
-    // Validate status code
-    const statusCode = parseInt(code, 10);
-    if (isNaN(statusCode) || statusCode < 100 || statusCode > 599) {
+    // BUG FIX: Strict type validation - reject non-integer inputs
+    // parseInt("200abc") would silently convert to 200, masking bugs
+    if (typeof code !== 'number' || !Number.isInteger(code)) {
+      // Try to parse if it's a string, but validate strictly
+      if (typeof code === 'string') {
+        // Check if the string is purely numeric
+        if (!/^\d+$/.test(code.trim())) {
+          throw new Error(`Invalid status code: ${code}. Must be an integer between 100 and 599`);
+        }
+        code = parseInt(code, 10);
+      } else {
+        throw new Error(`Invalid status code type: ${typeof code}. Must be a number`);
+      }
+    }
+
+    // Validate status code range
+    if (code < 100 || code > 599) {
       throw new Error(`Invalid status code: ${code}. Must be between 100 and 599`);
     }
-    this.statusCode = statusCode;
+
+    this.statusCode = code;
     return this;
   }
 

@@ -60,21 +60,33 @@ function staticFiles(root, options = {}) {
 
     let pathname;
     try {
+      // BUG FIX: Decode URL encoding to catch encoded path traversal attempts
+      // Decode twice to catch double-encoded attacks like %252e%252e
       pathname = decodeURIComponent(ctx.path);
+      // Second decode to catch double encoding
+      try {
+        const doubleDecoded = decodeURIComponent(pathname);
+        if (doubleDecoded !== pathname) {
+          pathname = doubleDecoded;
+        }
+      } catch (e) {
+        // Single decode is fine, continue
+      }
     } catch (e) {
       return ctx.status(400).json({ error: 'Invalid URL encoding' });
     }
-    
-    // Normalize the path to prevent directory traversal
-    const normalizedPath = path.normalize(pathname).replace(/^(\.\.(\/|\\|$))+/, '');
-    
-    // Ensure the path doesn't contain any traversal patterns
-    if (pathname.includes('..') || pathname.includes('\0')) {
+
+    // BUG FIX: Check for traversal patterns AFTER decoding
+    // This catches URL-encoded traversal like %2e%2e
+    if (pathname.includes('..') || pathname.includes('\0') || pathname.includes('%2e') || pathname.includes('%2E')) {
       if (opts.fallthrough) {
         return next();
       }
       return ctx.status(403).json({ error: 'Forbidden' });
     }
+
+    // Normalize the path to prevent directory traversal
+    const normalizedPath = path.normalize(pathname).replace(/^(\.\.(\/|\\|$))+/, '');
 
     const filePath = path.join(opts.root, normalizedPath);
     
