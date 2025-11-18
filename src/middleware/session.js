@@ -130,18 +130,19 @@ function session(options = {}) {
     ctx._sessionSaveNeeded = false;
     ctx._sessionSaved = false;
     
-    // Override send methods to save session before response
-    ctx.send = function(data) {
+    // BUG FIX: Override send methods to save session before response
+    // CRITICAL: Must await session save to prevent data loss
+    ctx.send = async function(data) {
       if (!ctx.responded && !ctx._sessionSaved) {
-        saveSessionSync(ctx, opts);
+        await saveSession(ctx, opts);  // Use async version
         ctx._sessionSaved = true;
       }
       return originalSend.call(ctx, data);
     };
 
-    ctx.json = function(data) {
+    ctx.json = async function(data) {
       if (!ctx.responded && !ctx._sessionSaved) {
-        saveSessionSync(ctx, opts);
+        await saveSession(ctx, opts);  // Use async version
         ctx._sessionSaved = true;
       }
       return originalJson.call(ctx, data);

@@ -64,6 +64,43 @@ class Response {
   }
 
   cookie(name, value, options = {}) {
+    // SECURITY FIX: Comprehensive cookie validation to prevent header injection
+
+    // Validate cookie name
+    if (!name || typeof name !== 'string') {
+      throw new Error('Cookie name must be a non-empty string');
+    }
+
+    if (name.length > 256) {
+      throw new Error(`Cookie name too long: ${name.length} bytes (max 256)`);
+    }
+
+    // RFC 6265 compliant cookie name validation
+    if (!/^[!#$%&'*+\-.0-9A-Z^_`a-z|~]+$/.test(name)) {
+      throw new Error(`Invalid cookie name: ${name}`);
+    }
+
+    // SECURITY: Check for CRLF injection in name
+    if (/[\r\n\x00]/.test(name)) {
+      throw new Error('Cookie name cannot contain CRLF or null characters');
+    }
+
+    // Validate value length
+    const stringValue = String(value);
+    if (stringValue.length > 4096) {
+      throw new Error(`Cookie value too long: ${stringValue.length} bytes (max 4096)`);
+    }
+
+    // SECURITY: Validate domain option
+    if (options.domain && /[\r\n\x00]/.test(String(options.domain))) {
+      throw new Error('Cookie domain cannot contain CRLF or null characters');
+    }
+
+    // SECURITY: Validate path option
+    if (options.path && /[\r\n\x00]/.test(String(options.path))) {
+      throw new Error('Cookie path cannot contain CRLF or null characters');
+    }
+
     let cookieString = `${name}=${encodeURIComponent(value)}`;
 
     if (options.domain) {
@@ -152,16 +189,19 @@ class Response {
   }
 
   format(obj) {
+    // BUG FIX: Correct callback signature to match Express.js behavior
     const keys = Object.keys(obj);
-    const accepts = this.req.accepts(keys);
+    const accepts = this.req ? this.req.accepts(keys) : false;
 
-    if (accepts) {
+    if (accepts && obj[accepts]) {
       this.type(accepts);
-      obj[accepts](this.req, this);
-    } else {
-      this.status(406).send('Not Acceptable');
+      // Call formatter with no arguments per Express convention
+      obj[accepts]();
+      return this;
     }
 
+    // BUG FIX: Return early after sending 406 response
+    this.status(406).send('Not Acceptable');
     return this;
   }
 

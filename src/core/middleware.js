@@ -169,17 +169,39 @@ function createMiddleware(app) {
     
     etag: (options = {}) => {
       const crypto = require('crypto');
-      
+
       return async (ctx, next) => {
+        // BUG FIX: Intercept response body to generate ETag
+        // The previous implementation used ctx.res._getData() which doesn't exist
+        // on real Node.js response objects (only in mock objects)
+
+        let responseBody = null;
+        const originalSend = ctx.send;
+        const originalJson = ctx.json;
+
+        // Intercept send() to capture body
+        ctx.send = function(data) {
+          responseBody = data;
+          return originalSend.call(this, data);
+        };
+
+        // Intercept json() to capture body
+        ctx.json = function(data) {
+          responseBody = JSON.stringify(data);
+          return originalJson.call(this, data);
+        };
+
         await next();
-        
-        if (ctx.method === 'GET' && ctx.statusCode === 200) {
-          const body = ctx.res._getData ? ctx.res._getData() : '';
+
+        // Generate ETag if we captured a body
+        if (ctx.method === 'GET' && ctx.statusCode === 200 && responseBody) {
+          const bodyStr = typeof responseBody === 'string' ? responseBody : String(responseBody);
           // SECURITY: Use SHA-256 instead of MD5 for cryptographic strength
-          const etag = crypto.createHash('sha256').update(body).digest('hex').substring(0, 32);
+          const etag = crypto.createHash('sha256').update(bodyStr).digest('hex').substring(0, 32);
 
           ctx.set('ETag', `"${etag}"`);
 
+          // Check if client's ETag matches (conditional GET)
           if (ctx.get('if-none-match') === `"${etag}"`) {
             ctx.status(304).end();
           }
@@ -188,14 +210,34 @@ function createMiddleware(app) {
     },
     
     favicon: (path) => {
-      const fs = require('fs');
-      const favicon = fs.readFileSync(path);
-      
+      // BUG FIX: Use async file reading to avoid blocking event loop
+      const fs = require('fs').promises;
+      let favicon = null;
+      let loading = null;
+
+      // Start loading favicon asynchronously
+      loading = fs.readFile(path).then(data => {
+        favicon = data;
+        loading = null;
+      }).catch(err => {
+        console.error('Failed to load favicon:', err.message);
+        loading = null;
+      });
+
       return async (ctx, next) => {
         if (ctx.path === '/favicon.ico') {
-          ctx.set('Content-Type', 'image/x-icon');
-          ctx.set('Cache-Control', 'public, max-age=86400');
-          ctx.send(favicon);
+          // Wait for favicon to load if still loading
+          if (loading) {
+            await loading;
+          }
+
+          if (favicon) {
+            ctx.set('Content-Type', 'image/x-icon');
+            ctx.set('Cache-Control', 'public, max-age=86400');
+            ctx.send(favicon);
+          } else {
+            ctx.status(404).send('Favicon not found');
+          }
         } else {
           await next();
         }
