@@ -112,11 +112,16 @@ class Layer {
   }
 
   async handle(ctx, next) {
-    if (this.handler.length > 2) {
-      return this.handler(ctx, next);
-    } else {
-      return await this.handler(ctx, next);
+    // BUG FIX: Properly detect and handle async functions
+    // Function.length doesn't indicate whether a function is async
+    // Instead, check if the result is a Promise and await it
+    const result = this.handler(ctx, next);
+
+    if (result && typeof result.then === 'function') {
+      return await result;
     }
+
+    return result;
   }
 
   handles_method(method) {

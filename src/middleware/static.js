@@ -218,12 +218,19 @@ async function sendFile(ctx, filePath, stats, opts) {
     return await sendRangeFile(ctx, filePath, stats, range);
   }
 
-  // SECURITY WARNING: setHeaders callback receives the actual file system path
-  // Callbacks MUST sanitize the filePath before using it in response headers
-  // to prevent information disclosure and header injection attacks.
-  // Example: path.basename(filePath) to get only the filename
+  // SECURITY FIX (BUG-SEC-003): Prevent information disclosure by only exposing filename
+  // BUG FIX (BUG-FUNC-017): Wrap callback in try-catch to prevent uncaught errors
   if (opts.setHeaders) {
-    opts.setHeaders(ctx, filePath, stats);
+    try {
+      // Only expose the basename to prevent filesystem path disclosure
+      // If developers need the full path, they can use ctx.path
+      const safeFileName = path.basename(filePath);
+      opts.setHeaders(ctx, safeFileName, stats);
+    } catch (error) {
+      // Log error but don't expose details to client
+      console.error('Error in setHeaders callback:', error.message);
+      // Continue serving the file even if setHeaders fails
+    }
   }
 
   if (ctx.method === 'HEAD') {

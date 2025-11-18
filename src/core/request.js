@@ -85,12 +85,43 @@ class Request {
     }
   }
 
-  getIPs() {
+  getIPs(trustProxy = false) {
+    // SECURITY FIX: Only trust X-Forwarded-For header if explicitly configured
+    // Prevents IP spoofing attacks via header manipulation
+    // Default behavior is to NOT trust proxy headers for security
+    if (!trustProxy) {
+      return [this.ip];
+    }
+
     const forwarded = this.headers['x-forwarded-for'];
     if (forwarded) {
-      return forwarded.split(',').map(ip => ip.trim());
+      const ips = forwarded.split(',').map(ip => ip.trim());
+      // SECURITY: Validate each IP address format
+      return ips.filter(ip => this._isValidIP(ip));
     }
     return [this.ip];
+  }
+
+  _isValidIP(ip) {
+    // Basic IPv4 and IPv6 validation
+    const ipv4Pattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+    const ipv6Pattern = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
+
+    if (!ip || typeof ip !== 'string') {
+      return false;
+    }
+
+    // Check IPv4
+    if (ipv4Pattern.test(ip)) {
+      const parts = ip.split('.');
+      return parts.every(part => {
+        const num = parseInt(part, 10);
+        return num >= 0 && num <= 255;
+      });
+    }
+
+    // Check IPv6 (basic validation)
+    return ipv6Pattern.test(ip);
   }
 
   get(headerName) {

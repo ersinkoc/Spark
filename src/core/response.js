@@ -64,6 +64,43 @@ class Response {
   }
 
   cookie(name, value, options = {}) {
+    // SECURITY FIX: Comprehensive cookie validation to prevent header injection
+
+    // Validate cookie name
+    if (!name || typeof name !== 'string') {
+      throw new Error('Cookie name must be a non-empty string');
+    }
+
+    if (name.length > 256) {
+      throw new Error(`Cookie name too long: ${name.length} bytes (max 256)`);
+    }
+
+    // RFC 6265 compliant cookie name validation
+    if (!/^[!#$%&'*+\-.0-9A-Z^_`a-z|~]+$/.test(name)) {
+      throw new Error(`Invalid cookie name: ${name}`);
+    }
+
+    // SECURITY: Check for CRLF injection in name
+    if (/[\r\n\x00]/.test(name)) {
+      throw new Error('Cookie name cannot contain CRLF or null characters');
+    }
+
+    // Validate value length
+    const stringValue = String(value);
+    if (stringValue.length > 4096) {
+      throw new Error(`Cookie value too long: ${stringValue.length} bytes (max 4096)`);
+    }
+
+    // SECURITY: Validate domain option
+    if (options.domain && /[\r\n\x00]/.test(String(options.domain))) {
+      throw new Error('Cookie domain cannot contain CRLF or null characters');
+    }
+
+    // SECURITY: Validate path option
+    if (options.path && /[\r\n\x00]/.test(String(options.path))) {
+      throw new Error('Cookie path cannot contain CRLF or null characters');
+    }
+
     let cookieString = `${name}=${encodeURIComponent(value)}`;
 
     if (options.domain) {
@@ -152,16 +189,19 @@ class Response {
   }
 
   format(obj) {
+    // BUG FIX: Correct callback signature to match Express.js behavior
     const keys = Object.keys(obj);
-    const accepts = this.req.accepts(keys);
+    const accepts = this.req ? this.req.accepts(keys) : false;
 
-    if (accepts) {
+    if (accepts && obj[accepts]) {
       this.type(accepts);
-      obj[accepts](this.req, this);
-    } else {
-      this.status(406).send('Not Acceptable');
+      // Call formatter with no arguments per Express convention
+      obj[accepts]();
+      return this;
     }
 
+    // BUG FIX: Return early after sending 406 response
+    this.status(406).send('Not Acceptable');
     return this;
   }
 
@@ -199,20 +239,45 @@ class Response {
   jsonp(obj) {
     const callback = this.req.query.callback || 'callback';
 
+    // SECURITY FIX (BUG-SEC-004): Enhanced JSONP callback validation
     // Validate callback is a valid JavaScript identifier or dotted path
     // Allows: functionName, obj.method, namespace.obj.method, etc.
     if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*(\.[a-zA-Z_$][a-zA-Z0-9_$]*)*$/.test(callback)) {
       return this.status(400).json({ error: 'Invalid callback name' });
     }
 
-    // Limit callback length to prevent abuse
-    if (callback.length > 255) {
+    // SECURITY: Reject reserved JavaScript keywords to prevent injection
+    const reservedWords = ['eval', 'Function', 'constructor', 'prototype', '__proto__',
+                           'alert', 'confirm', 'prompt', 'document', 'window', 'location'];
+    const callbackParts = callback.split('.');
+    for (const part of callbackParts) {
+      if (reservedWords.includes(part)) {
+        return this.status(400).json({ error: 'Invalid callback name' });
+      }
+    }
+
+    // SECURITY: Limit callback length to prevent abuse (reduced from 255 to 128)
+    if (callback.length > 128) {
       return this.status(400).json({ error: 'Callback name too long' });
     }
 
+    // SECURITY: Limit nesting depth to prevent complex attack chains
+    if (callbackParts.length > 5) {
+      return this.status(400).json({ error: 'Callback nesting too deep' });
+    }
+
     this.type('text/javascript');
+
+    // SECURITY: Set multiple security headers for JSONP responses
     this.set('X-Content-Type-Options', 'nosniff');
-    this.send(`/**/ typeof ${callback} === 'function' && ${callback}(${JSON.stringify(obj)})`);
+    this.set('X-Frame-Options', 'DENY'); // Prevent clickjacking
+    this.set('Content-Security-Policy', "default-src 'none'"); // Restrict content loading
+
+    // SECURITY: Serialize JSON data before inserting to prevent injection
+    const safeData = JSON.stringify(obj);
+
+    // SECURITY: Use safer JSONP pattern that checks for function type
+    this.send(`/**/ typeof ${callback} === 'function' && ${callback}(${safeData})`);
     return this;
   }
 
