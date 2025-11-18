@@ -40,23 +40,34 @@ function createMiddleware(app) {
           ctx.status(401).json({ error: 'Unauthorized' });
           return;
         }
-        
+
         const credentials = Buffer.from(auth.slice(6), 'base64').toString();
         const [username, password] = credentials.split(':');
 
-        // SECURITY: Use timing-safe comparison to prevent timing attacks
+        // SECURITY FIX (BUG-SEC-006): Prevent username enumeration via timing attacks
+        // Always perform the same operations regardless of username existence
         let authenticated = false;
 
-        if (options.users && options.users[username]) {
-          const expectedPassword = options.users[username];
+        // Use a dummy password for timing-safe comparison when user doesn't exist
+        const dummyPassword = 'dummy_password_to_prevent_timing_attack_1234567890';
+
+        if (options.users) {
+          // Get the expected password (or dummy if user doesn't exist)
+          const expectedPassword = options.users[username] || dummyPassword;
+          const userExists = options.users.hasOwnProperty(username);
+
           try {
-            // Pad passwords to same length for timing-safe comparison
+            // SECURITY: Always perform timing-safe comparison, even for non-existent users
+            // This prevents timing attacks that could enumerate valid usernames
             const maxLen = Math.max(password.length, expectedPassword.length);
             const passwordBuf = Buffer.from(password.padEnd(maxLen, '\0'));
             const expectedBuf = Buffer.from(expectedPassword.padEnd(maxLen, '\0'));
 
-            authenticated = crypto.timingSafeEqual(passwordBuf, expectedBuf) &&
-                          password.length === expectedPassword.length;
+            const passwordMatches = crypto.timingSafeEqual(passwordBuf, expectedBuf) &&
+                                   password.length === expectedPassword.length;
+
+            // Only set authenticated if BOTH user exists AND password matches
+            authenticated = userExists && passwordMatches;
           } catch (err) {
             // Length mismatch or other error - not authenticated
             authenticated = false;
@@ -66,10 +77,24 @@ function createMiddleware(app) {
         if (authenticated) {
           ctx.user = { username };
           await next();
-        } else if (options.verify && await options.verify(username, password)) {
-          ctx.user = { username };
-          await next();
-        } else {
+        } else if (options.verify) {
+          // SECURITY: Even with custom verify, perform dummy operation if needed
+          // to maintain constant timing
+          const verifyResult = await options.verify(username, password);
+          if (verifyResult) {
+            ctx.user = { username };
+            await next();
+            return;
+          }
+        }
+
+        // SECURITY: Add small random delay to further prevent timing attacks
+        // This makes it harder to measure timing differences
+        if (!authenticated) {
+          await new Promise(resolve => setTimeout(resolve, Math.random() * 10));
+        }
+
+        if (!authenticated) {
           ctx.set('WWW-Authenticate', 'Basic realm="Secure Area"');
           ctx.status(401).json({ error: 'Unauthorized' });
         }

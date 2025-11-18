@@ -185,7 +185,8 @@ function slowDown(options = {}) {
     skipSuccessfulRequests: options.skipSuccessfulRequests || false,
     skipFailedRequests: options.skipFailedRequests || false,
     keyGenerator: options.keyGenerator || defaultKeyGenerator,
-    store: options.store || new MemoryStore(),
+    // SECURITY FIX (BUG-SEC-009): Pass maxKeys to prevent memory exhaustion in slowDown
+    store: options.store || new MemoryStore({ maxKeys: options.maxKeys }),
     ...options
   };
 
